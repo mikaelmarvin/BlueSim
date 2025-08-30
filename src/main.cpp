@@ -11,8 +11,4 @@ LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_INF);
 #include "peripheral/Peripheral.hpp"
 #endif
 
-
-int main() {
-
-    return 0;
-}
+int main() { return 0; }
