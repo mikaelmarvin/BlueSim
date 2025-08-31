@@ -5,7 +5,6 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/kernel.h>
 
-#include <iostream>
 #include <string>
 
 class BtManager {
@@ -30,7 +29,7 @@ private:
 
 // For central devices
 class CentralManager : public BtManager {
-protected:
+public:
   virtual void on_connected(struct bt_conn *conn, uint8_t err) = 0;
   virtual void on_disconnected(struct bt_conn *conn, uint8_t reason) = 0;
   virtual void on_security_changed(struct bt_conn *conn, bt_security_t level,
@@ -39,7 +38,7 @@ protected:
 
 // For peripheral devices
 class PeripheralManager : public BtManager {
-protected:
+public:
   virtual void on_connected(struct bt_conn *conn, uint8_t err) = 0;
   virtual void on_disconnected(struct bt_conn *conn, uint8_t reason) = 0;
   virtual void on_security_changed(struct bt_conn *conn, bt_security_t level,

@@ -45,11 +45,11 @@ void BtManager::general_connected_cb(struct bt_conn *conn, uint8_t err) {
 
   // Call the appropriate role callback
   if (info.role == BT_CONN_ROLE_CENTRAL) {
-    if (auto central = dynamic_cast<CentralManager *>(instance_)) {
+    if (auto central = static_cast<CentralManager *>(instance_)) {
       central->on_connected(conn, err);
     }
   } else if (info.role == BT_CONN_ROLE_PERIPHERAL) {
-    if (auto peripheral = dynamic_cast<PeripheralManager *>(instance_)) {
+    if (auto peripheral = static_cast<PeripheralManager *>(instance_)) {
       peripheral->on_connected(conn, err);
     }
   }
@@ -67,11 +67,11 @@ void BtManager::general_disconnected_cb(struct bt_conn *conn, uint8_t reason) {
   }
 
   if (info.role == BT_CONN_ROLE_CENTRAL) {
-    if (auto central = dynamic_cast<CentralManager *>(instance_)) {
+    if (auto central = static_cast<CentralManager *>(instance_)) {
       central->on_disconnected(conn, reason);
     }
   } else if (info.role == BT_CONN_ROLE_PERIPHERAL) {
-    if (auto peripheral = dynamic_cast<PeripheralManager *>(instance_)) {
+    if (auto peripheral = static_cast<PeripheralManager *>(instance_)) {
       peripheral->on_disconnected(conn, reason);
     }
   }
@@ -91,11 +91,11 @@ void BtManager::general_security_changed_cb(struct bt_conn *conn,
   }
 
   if (info.role == BT_CONN_ROLE_CENTRAL) {
-    if (auto central = dynamic_cast<CentralManager *>(instance_)) {
+    if (auto central = static_cast<CentralManager *>(instance_)) {
       central->on_security_changed(conn, level, err);
     }
   } else if (info.role == BT_CONN_ROLE_PERIPHERAL) {
-    if (auto peripheral = dynamic_cast<PeripheralManager *>(instance_)) {
+    if (auto peripheral = static_cast<PeripheralManager *>(instance_)) {
       peripheral->on_security_changed(conn, level, err);
     }
   }
