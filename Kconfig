@@ -8,9 +8,4 @@ config ROLE_PERIPHERAL
     bool "Enable Peripheral Role"
     default n
 
-config ROLE_BOTH
-    bool "Enable both roles (Central + Peripheral)"
-    depends on ROLE_CENTRAL && ROLE_PERIPHERAL
-    default n
-
 endmenu

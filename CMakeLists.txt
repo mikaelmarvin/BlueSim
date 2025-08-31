@@ -23,3 +23,5 @@ if(CONFIG_ROLE_PERIPHERAL)
       src/peripheral/Peripheral.cpp
   )
 endif()
+
+target_include_directories(app PRIVATE src)
