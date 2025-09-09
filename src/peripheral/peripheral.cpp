@@ -6,27 +6,29 @@ LOG_MODULE_REGISTER(PERIPHERAL, LOG_LEVEL_DBG);
 // Static array
 Peripheral *Peripheral::registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET] = {nullptr};
 
-Peripheral::Peripheral(uint8_t id) : _id(id), _adv(nullptr), _conn(nullptr) {
+Peripheral::Peripheral() : _conn(nullptr) {
   struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
       BT_LE_ADV_OPT_EXT_ADV | BT_LE_ADV_OPT_CONN, BT_GAP_ADV_FAST_INT_MIN_2,
       BT_GAP_ADV_FAST_INT_MAX_2, nullptr);
 
-  adv_param.id = id;
+  _id = bt_id_create(NULL, NULL);
+  adv_param.id = _id;
   Peripheral::registry[_id] = this;
+  k_work_init(&_advert.work, Peripheral::workHandler);
 
-  int err = bt_le_ext_adv_create(&adv_param, NULL, &_adv);
+  int err = bt_le_ext_adv_create(&adv_param, NULL, &_advert.adv);
   if (err) {
-    LOG_ERR("Failed to create adv for id %d (err %d)\n", id, err);
+    LOG_ERR("Failed to create adv for id %d (err %d)\n", _id, err);
   } else {
-    LOG_INF("Peripheral %d created adv %p\n", id, _adv);
+    LOG_INF("Peripheral %d created adv %p\n", _id, _advert.adv);
   }
 
   static const uint8_t device_name[8 + 1] = "BlueSimI";
   // device_name[7] = '0' + id;
-  _adv_data[0] =
+  _advert.adv_data[0] =
       BT_DATA(BT_DATA_NAME_COMPLETE, device_name, sizeof(device_name) - 1);
 
-  err = bt_le_ext_adv_set_data(_adv, _adv_data, 1, nullptr, 0);
+  err = bt_le_ext_adv_set_data(_advert.adv, _advert.adv_data, 1, nullptr, 0);
   if (err) {
     LOG_ERR("Peripheral %d failed to set adv data (err %d)\n", _id, err);
   }
@@ -35,16 +37,30 @@ Peripheral::Peripheral(uint8_t id) : _id(id), _adv(nullptr), _conn(nullptr) {
 Peripheral::~Peripheral() { Peripheral::registry[_id] = nullptr; }
 
 int Peripheral::start() {
-  if (!_adv)
-    return -1;
+  int err = k_work_submit(&_advert.work);
 
-  int err = bt_le_ext_adv_start(_adv, BT_LE_EXT_ADV_START_DEFAULT);
-  if (err) {
-    LOG_ERR("Peripheral %d failed to start (err %d)\n", _id, err);
-  } else {
-    LOG_INF("Peripheral %d started advertising\n", _id);
+  if (!err) {
+    LOG_ERR("Peripheral %d failed to submit k work item (err %d)\n", _id, err);
   }
+
   return err;
+}
+
+void Peripheral::submit_advertiser() {
+
+  if (_advert.adv) {
+    int err = bt_le_ext_adv_start(_advert.adv, BT_LE_EXT_ADV_START_DEFAULT);
+    if (err) {
+      LOG_ERR("Peripheral %d failed to start advertising set (err %d)\n", _id,
+              err);
+      return;
+    }
+  } else {
+    LOG_ERR("Advertiser for peripheral %d not setup correctly\n", _id);
+    return;
+  }
+
+  LOG_INF("Advertiser %d successfully started\n", _id);
 }
 
 void Peripheral::onConnected(struct bt_conn *conn) {
@@ -53,6 +69,14 @@ void Peripheral::onConnected(struct bt_conn *conn) {
 
 void Peripheral::onDisconnected(struct bt_conn *conn, uint8_t reason) {
   LOG_WRN("Peripheral %d disconnected (reason %u)\n", _id, reason);
+}
+
+void Peripheral::workHandler(struct k_work *work) {
+  // Recover the Peripheral instance from the k_work pointer
+  Peripheral *self = CONTAINER_OF(work, Peripheral, _advert.work);
+
+  // Call the instance method to perform work
+  self->submit_advertiser();
 }
 
 // Utility function to map the peripheral from which the connection is coming
