@@ -3,9 +3,15 @@ extern "C" {
 #include <zephyr/bluetooth/conn.h>
 }
 
+struct advertiser_info {
+  struct k_work work;
+  struct bt_le_ext_adv *adv;
+  struct bt_data adv_data[1];
+};
+
 class Peripheral {
 public:
-  Peripheral(uint8_t id);
+  Peripheral();
   virtual ~Peripheral();
 
   // Called when this peripheral got connected/disconnected
@@ -16,6 +22,10 @@ public:
   static void bt_conn_cb_connected(struct bt_conn *conn, uint8_t err);
   static void bt_conn_cb_disconnected(struct bt_conn *conn, uint8_t reason);
 
+  // Static work handler: required because k_work cannot call non-static member
+  // functions
+  static void workHandler(struct k_work *work);
+
   // Start advertising
   int start();
 
@@ -23,9 +33,10 @@ public:
   static Peripheral *fromConn(struct bt_conn *conn);
 
 private:
+  void submit_advertiser();
+
   uint8_t _id;
-  struct bt_le_ext_adv *_adv;
-  struct bt_data _adv_data[1];
+  struct advertiser_info _advert;
   struct bt_conn *_conn;
 
   static Peripheral *registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET];

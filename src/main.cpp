@@ -1,4 +1,4 @@
-#include "peripheral.hpp"
+#include "peripheral/peripheral.hpp"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
@@ -26,8 +26,8 @@ int main() {
   LOG_INF("Bluetooth initialized");
 
   // Create your virtual peripherals
-  Peripheral p1(0);
-  Peripheral p2(1);
+  Peripheral p1;
+  Peripheral p2;
 
   p1.start();
   p2.start();
