@@ -3,6 +3,8 @@ extern "C" {
 #include <zephyr/bluetooth/conn.h>
 }
 
+#include "service.hpp"
+
 struct advertiser_info {
   struct k_work work;
   struct bt_le_ext_adv *adv;
@@ -33,11 +35,13 @@ public:
   static Peripheral *fromConn(struct bt_conn *conn);
 
 private:
-  void submit_advertiser();
+  void submitAdvertiser();
 
   uint8_t _id;
   struct advertiser_info _advert;
   struct bt_conn *_conn;
+  GattService *_services[MAX_SERVICES_PER_PERIPHERAL];
+  uint8_t _serviceCount;
 
   static Peripheral *registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET];
 };

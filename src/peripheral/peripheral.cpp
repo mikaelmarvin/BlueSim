@@ -6,7 +6,8 @@ LOG_MODULE_REGISTER(PERIPHERAL, LOG_LEVEL_DBG);
 // Static array
 Peripheral *Peripheral::registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET] = {nullptr};
 
-Peripheral::Peripheral() : _conn(nullptr) {
+Peripheral::Peripheral() : _conn(nullptr), _serviceCount(0) {
+  memset(_services, 0, sizeof(_services));
   struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
       BT_LE_ADV_OPT_EXT_ADV | BT_LE_ADV_OPT_CONN, BT_GAP_ADV_FAST_INT_MIN_2,
       BT_GAP_ADV_FAST_INT_MAX_2, nullptr);
@@ -46,7 +47,7 @@ int Peripheral::start() {
   return err;
 }
 
-void Peripheral::submit_advertiser() {
+void Peripheral::submitAdvertiser() {
 
   if (_advert.adv) {
     int err = bt_le_ext_adv_start(_advert.adv, BT_LE_EXT_ADV_START_DEFAULT);
@@ -76,7 +77,7 @@ void Peripheral::workHandler(struct k_work *work) {
   Peripheral *self = CONTAINER_OF(work, Peripheral, _advert.work);
 
   // Call the instance method to perform work
-  self->submit_advertiser();
+  self->submitAdvertiser();
 }
 
 // Utility function to map the peripheral from which the connection is coming
