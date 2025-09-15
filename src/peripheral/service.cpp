@@ -47,7 +47,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
       .perm = BT_GATT_PERM_READ,
       .read = bt_gatt_attr_read_chrc,
       .write = nullptr,
-      .user_data = &characteristic,
+      .user_data = &chrc,
   };
 
   // Characteristic Value
@@ -62,6 +62,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   // Optional CCC
   if (characteristic->properties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
+    _cccs[_cccCount] = characteristic->cccCallback(),
     _attrs[_attrCount++] = {
         .uuid = BT_UUID_GATT_CCC,
         .perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
