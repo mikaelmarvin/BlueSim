@@ -48,15 +48,15 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   _attrs[_attrCount++] = {
       .uuid = (bt_uuid *)characteristic->getUuid(),
       .perm = characteristic->getPermissions(),
-      .read = characteristic->getReadCallback(),
-      .write = characteristic->getWriteCallback(),
-      .user_data = characteristic->getUserData(),
+      .read = Characteristic::_readDispatcher,
+      .write = Characteristic::_writeDispatcher,
+      .user_data = characteristic,
   };
 
   // Optional CCC
   if (characteristic->properties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
-    _cccs[_cccCount].cfg_changed = characteristic->getCccCallback(),
+    _cccs[_cccCount].cfg_changed = Characteristic::_cccDispatcher,
     _attrs[_attrCount++] = {
         .uuid = BT_UUID_GATT_CCC,
         .perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,

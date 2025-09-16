@@ -8,15 +8,10 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/slist.h>
 
-// Callback function pointer types
-typedef ssize_t (*ReadCallback)(struct bt_conn *conn,
-                                const struct bt_gatt_attr *attr, void *buf,
-                                uint16_t len, uint16_t offset, uint8_t flags);
-typedef ssize_t (*WriteCallback)(struct bt_conn *conn,
-                                 const struct bt_gatt_attr *attr,
-                                 const void *buf, uint16_t len, uint16_t offset,
-                                 uint8_t flags);
-typedef void (*CCCCallback)(const struct bt_gatt_attr *attr, uint16_t value);
+using ReadCallback = bt_gatt_attr_read_func_t;
+using WriteCallback = bt_gatt_attr_write_func_t;
+// This definition was taken from bt_gatt_ccc_managed_user_data type
+using CCCCallback = void (*)(const struct bt_gatt_attr *attr, uint16_t value);
 
 // Characteristic properties
 enum class CharProperty : uint8_t {
@@ -37,35 +32,30 @@ public:
   void init(const bt_uuid *uuid, CharProperty properties,
             const char *name = "");
 
-  void setReadCallback(ReadCallback callback);
-  void setWriteCallback(WriteCallback callback);
-  void setCCCCallback(CCCCallback callback);
-  void setPermissions(bt_gatt_perm_t permissions);
-  void setUserData(void *data);
+  ReadCallback _readCallback = nullptr;
+  WriteCallback _writeCallback = nullptr;
+  CCCCallback _cccCallback = nullptr;
 
-  const bt_uuid *getUuid() const { return _uuid; }
-  CharProperty getProperties() const { return _properties; }
-  const char *getName() const { return _name; }
   uint16_t getPermissions() const { return _permissions; }
+  CharProperty getProperties() const { return _properties; }
+  const bt_uuid *getUuid() const { return _uuid; }
 
   int notify(struct bt_conn *conn, const void *data, uint16_t len);
   int indicate(struct bt_conn *conn, const void *data, uint16_t len);
+
+  static ssize_t _readDispatcher(struct bt_conn *conn,
+                                 const struct bt_gatt_attr *attr, void *buf,
+                                 uint16_t len, uint16_t offset);
+  static ssize_t _writeDispatcher(struct bt_conn *conn,
+                                  const struct bt_gatt_attr *attr,
+                                  const void *buf, uint16_t len,
+                                  uint16_t offset, uint8_t flags);
+  static void _cccDispatcher(const struct bt_gatt_attr *attr, uint16_t value);
 
 private:
   const bt_uuid *_uuid = nullptr;
   CharProperty _properties = 0;
   char _name[32];
-  ReadCallback _readCallback = nullptr;
-  WriteCallback _writeCallback = nullptr;
-  CCCCallback _cccCallback = nullptr;
   uint16_t _permissions = 0;
   void *_userData = nullptr;
-
-  static ssize_t _readWrapper(struct bt_conn *conn,
-                              const struct bt_gatt_attr *attr, void *buf,
-                              uint16_t len, uint16_t offset, uint8_t flags);
-  static ssize_t _writeWrapper(struct bt_conn *conn,
-                               const struct bt_gatt_attr *attr, const void *buf,
-                               uint16_t len, uint16_t offset, uint8_t flags);
-  static void _cccWrapper(const struct bt_gatt_attr *attr, uint16_t value);
 };
