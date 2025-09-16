@@ -32,9 +32,9 @@ int main() {
   Peripheral p2;
 
   // Create custom services at runtime using static allocation
-  static GattService service1;
-  static GattService uartService;
-  static GattService service2;
+  static Service service1;
+  static Service uartService;
+  static Service service2;
 
   // Initialize service 1
   bt_uuid_128 ble_edrive_param_char = BT_UUID_INIT_128(

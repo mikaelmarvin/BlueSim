@@ -1,18 +1,12 @@
 #include "service.hpp"
 
 Service::Service() {
-  _uuid = nullptr;
   memset(_name, 0, sizeof(_name));
   memset(&_gattService, 0, sizeof(_gattService));
   memset(_attrs, 0, sizeof(_attrs));
   memset(_chrcs, 0, sizeof(_chrcs));
   memset(_cccs, 0, sizeof(_cccs));
   memset(_characteristics, 0, sizeof(_characteristics));
-
-  _characteristicCount = 0;
-  _attrCount = 0;
-  _chrcCount = 0;
-  _cccCount = 0;
 }
 
 Service::init(const struct bt_uuid *uuid, const char *name = "") {
@@ -37,8 +31,8 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   // Characteristic Declaration
   bt_gatt_chrc &chrc = _chrcs[_chrcCount++];
   chrc = {
-      .uuid = (bt_uuid *)characteristic->uuid(),
-      .properties = characteristic->properties(),
+      .uuid = (bt_uuid *)characteristic->getUuid(),
+      .properties = characteristic->getProperties(),
       .value_handle = 0,
   };
 
@@ -52,17 +46,17 @@ int Service::addCharacteristic(Characteristic *characteristic) {
 
   // Characteristic Value
   _attrs[_attrCount++] = {
-      .uuid = (bt_uuid *)characteristic->uuid(),
-      .perm = characteristic->permissions(),
-      .read = characteristic->readCallback(),
-      .write = characteristic->writeCallback(),
-      .user_data = characteristic->userData(),
+      .uuid = (bt_uuid *)characteristic->getUuid(),
+      .perm = characteristic->getPermissions(),
+      .read = characteristic->getReadCallback(),
+      .write = characteristic->getWriteCallback(),
+      .user_data = characteristic->getUserData(),
   };
 
   // Optional CCC
   if (characteristic->properties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
-    _cccs[_cccCount] = characteristic->cccCallback(),
+    _cccs[_cccCount].cfg_changed = characteristic->getCccCallback(),
     _attrs[_attrCount++] = {
         .uuid = BT_UUID_GATT_CCC,
         .perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
@@ -71,6 +65,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
         .user_data = &_cccs[_cccCount++],
     };
   }
+  return 1;
 }
 
 int Service::registerService() {

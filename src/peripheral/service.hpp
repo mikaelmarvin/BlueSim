@@ -8,36 +8,31 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/slist.h>
 
-// Forward declaration
+#define MAX_CHARACTERISTICS_PER_SERVICE 3
+#define MAX_ATTRIBUTES_PER_SERVICE 3 * MAX_CHARACTERISTICS_PER_SERVICE + 1
+
 class Characteristic;
 
-// Base GATT Service class
 class Service {
 public:
   Service();
+  ~Service() = default;
   void init(const bt_uuid *uuid, const char *name = "");
-  virtual ~Service();
 
-  // Service management
   int registerService();
   void unregisterService();
 
-  // Characteristic management
   int addCharacteristic(Characteristic *characteristic);
 
-protected:
-  int buildServiceAttributes();
-
-  const struct bt_uuid *_uuid;
+private:
   char _name[32];
   struct bt_gatt_service _gattService;
   struct bt_gatt_attr _attrs[MAX_ATTRIBUTES_PER_SERVICE];
   struct bt_gatt_chrc _chrcs[MAX_CHARACTERISTICS_PER_SERVICE];
-  struct bt_gatt_ccc_cfg _cccs[MAX_CHARACTERISTICS_PER_SERVICE]
-                              [BT_GATT_CCC_MAX];
+  struct bt_gatt_ccc_managed_user_data _cccs[MAX_CHARACTERISTICS_PER_SERVICE];
   Characteristic *_characteristics[MAX_CHARACTERISTICS_PER_SERVICE];
-  uint8_t _characteristicCount;
-  uint8_t _attrCount;
-  uint8_t _chrcCount;
-  uint8_t _cccCount;
+  const struct bt_uuid *_uuid = nullptr;
+  uint8_t _attrCount = 0;
+  uint8_t _chrcCount = 0;
+  uint8_t _cccCount = 0;
 };
