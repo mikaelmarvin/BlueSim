@@ -10,7 +10,7 @@
 
 using ReadCallback = bt_gatt_attr_read_func_t;
 using WriteCallback = bt_gatt_attr_write_func_t;
-// This definition was taken from bt_gatt_ccc_managed_user_data type
+// This declaration was taken from bt_gatt_ccc_managed_user_data type
 using CCCCallback = void (*)(const struct bt_gatt_attr *attr, uint16_t value);
 
 // Characteristic properties
@@ -23,6 +23,18 @@ enum class CharProperty : uint8_t {
   BROADCAST = BT_GATT_CHRC_BROADCAST,
   AUTH = BT_GATT_CHRC_AUTH,
   EXT_PROP = BT_GATT_CHRC_EXT_PROP
+};
+
+// Characteristic permissions
+enum class CharPermission : uint16_t {
+  READ = BT_GATT_PERM_READ,
+  WRITE = BT_GATT_PERM_WRITE,
+  READ_ENCRYPT = BT_GATT_PERM_READ_ENCRYPT,
+  WRITE_ENCRYPT = BT_GATT_PERM_WRITE_ENCRYPT,
+  READ_AUTHEN = BT_GATT_PERM_READ_AUTHEN,
+  WRITE_AUTHEN = BT_GATT_PERM_WRITE_AUTHEN,
+  READ_AUTHOR = BT_GATT_PERM_READ_AUTHOR,
+  WRITE_AUTHOR = BT_GATT_PERM_WRITE_AUTHOR
 };
 
 class Characteristic {
@@ -58,4 +70,6 @@ private:
   char _name[32];
   uint16_t _permissions = 0;
   void *_userData = nullptr;
+  bool _notifications_enabled = false;
+  bool _indications_enabled = false;
 };

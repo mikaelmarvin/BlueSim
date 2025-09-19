@@ -54,7 +54,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   };
 
   // Optional CCC
-  if (characteristic->properties() &
+  if (characteristic->getProperties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
     _cccs[_cccCount].cfg_changed = Characteristic::_cccDispatcher,
     _attrs[_attrCount++] = {
@@ -68,9 +68,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   return 1;
 }
 
-int Service::registerService() {
+void Service::registerService() {
   _gattService.attrs = _attrs;
   _gattService.attr_count = _attrCount;
-
-  return bt_gatt_service_register(&_gattService);
 }

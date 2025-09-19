@@ -100,7 +100,7 @@ void Peripheral::bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
     uint8_t id = info.id; // This is the local identity (same as adv_param.id)
     Peripheral *p = Peripheral::registry[id];
     if (p) {
-      p->_conn = conn;
+      p->_conn = bt_conn_ref(conn);
       p->onConnected(conn);
       return;
     }
@@ -110,6 +110,8 @@ void Peripheral::bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
 void Peripheral::bt_conn_cb_disconnected(struct bt_conn *conn, uint8_t reason) {
   Peripheral *p = Peripheral::fromConn(conn);
   if (p) {
+    bt_conn_unref(p->_conn);
+    p->_conn = nullptr;
     p->onDisconnected(conn, reason);
   } else {
     LOG_WRN("Disconnected connection not associated with any peripheral");

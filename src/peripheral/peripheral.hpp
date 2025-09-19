@@ -5,6 +5,8 @@ extern "C" {
 
 #include "service.hpp"
 
+#define MAX_SERVICES_PER_PERIPHERAL 3
+
 struct advertiser_info {
   struct k_work work;
   struct bt_le_ext_adv *adv;
@@ -20,6 +22,11 @@ public:
   virtual void onConnected(struct bt_conn *conn);
   virtual void onDisconnected(struct bt_conn *conn, uint8_t reason);
 
+  // Start advertising
+  int start();
+
+  void addService();
+
   // Static global connection callbacks
   static void bt_conn_cb_connected(struct bt_conn *conn, uint8_t err);
   static void bt_conn_cb_disconnected(struct bt_conn *conn, uint8_t reason);
@@ -27,9 +34,6 @@ public:
   // Static work handler: required because k_work cannot call non-static member
   // functions
   static void workHandler(struct k_work *work);
-
-  // Start advertising
-  int start();
 
   // Map bt_conn back to Peripheral
   static Peripheral *fromConn(struct bt_conn *conn);
@@ -40,7 +44,7 @@ private:
   uint8_t _id;
   struct advertiser_info _advert;
   struct bt_conn *_conn;
-  GattService *_services[MAX_SERVICES_PER_PERIPHERAL];
+  Service *_services[MAX_SERVICES_PER_PERIPHERAL];
   uint8_t _serviceCount;
 
   static Peripheral *registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET];
