@@ -12,6 +12,7 @@
 #define MAX_ATTRIBUTES_PER_SERVICE 3 * MAX_CHARACTERISTICS_PER_SERVICE + 1
 
 class Characteristic;
+class Peripheral;
 
 class Service {
 public:
@@ -19,14 +20,14 @@ public:
   ~Service() = default;
   void init(const bt_uuid *uuid, const char *name = "");
 
-  int registerService();
-  void unregisterService();
-
+  int buildService();
   int addCharacteristic(Characteristic *characteristic);
 
-private:
+  Peripheral *_peripheral = nullptr;
   char _name[32];
   struct bt_gatt_service _gattService;
+
+private:
   struct bt_gatt_attr _attrs[MAX_ATTRIBUTES_PER_SERVICE];
   struct bt_gatt_chrc _chrcs[MAX_CHARACTERISTICS_PER_SERVICE];
   struct bt_gatt_ccc_managed_user_data _cccs[MAX_CHARACTERISTICS_PER_SERVICE];

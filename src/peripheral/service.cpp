@@ -68,7 +68,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   return 1;
 }
 
-void Service::registerService() {
+void Service::buildService() {
   _gattService.attrs = _attrs;
   _gattService.attr_count = _attrCount;
 }

@@ -47,6 +47,29 @@ int Peripheral::start() {
   return err;
 }
 
+void Peripheral::addService(Service *service) {
+  // Add checks later
+  service->_peripheral = this;
+  _services[_serviceCount++] = service;
+}
+
+void Peripheral::registerServices() {
+  for (Service *service : _services) {
+    if (service == nullptr) {
+      continue; // skip unused slots
+    }
+
+    int err = bt_gatt_service_register(&service->_gattService);
+    if (err) {
+      // Log or handle error depending on your needs
+      LOG_ERR("Failed to register service '%s' (err %d)", service->_name, err);
+      break;
+    } else {
+      LOG_INF("Service '%s' registered successfully", service->_name);
+    }
+  }
+}
+
 void Peripheral::submitAdvertiser() {
 
   if (_advert.adv) {

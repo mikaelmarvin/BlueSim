@@ -24,8 +24,8 @@ public:
 
   // Start advertising
   int start();
-
-  void addService();
+  void addService(Service *service);
+  void registerServices();
 
   // Static global connection callbacks
   static void bt_conn_cb_connected(struct bt_conn *conn, uint8_t err);
