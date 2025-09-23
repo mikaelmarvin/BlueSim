@@ -14,7 +14,7 @@ using WriteCallback = bt_gatt_attr_write_func_t;
 using CCCCallback = void (*)(const struct bt_gatt_attr *attr, uint16_t value);
 
 // Characteristic properties
-enum class CharProperty : uint8_t {
+enum CharProperty : uint8_t {
   READ = BT_GATT_CHRC_READ,
   WRITE = BT_GATT_CHRC_WRITE,
   WRITE_WITHOUT_RESP = BT_GATT_CHRC_WRITE_WITHOUT_RESP,
@@ -26,22 +26,20 @@ enum class CharProperty : uint8_t {
 };
 
 // Characteristic permissions
-enum class CharPermission : uint16_t {
+enum CharPermission : uint16_t {
   READ = BT_GATT_PERM_READ,
   WRITE = BT_GATT_PERM_WRITE,
   READ_ENCRYPT = BT_GATT_PERM_READ_ENCRYPT,
   WRITE_ENCRYPT = BT_GATT_PERM_WRITE_ENCRYPT,
   READ_AUTHEN = BT_GATT_PERM_READ_AUTHEN,
   WRITE_AUTHEN = BT_GATT_PERM_WRITE_AUTHEN,
-  READ_AUTHOR = BT_GATT_PERM_READ_AUTHOR,
-  WRITE_AUTHOR = BT_GATT_PERM_WRITE_AUTHOR
 };
 
 class Characteristic {
 public:
   Characteristic() = default;
   ~Characteristic() = default;
-  void init(const bt_uuid *uuid, CharProperty properties,
+  void init(const bt_uuid *uuid, uint8_t properties, uint16_t permissions,
             const char *name = "");
 
   ReadCallback _readCallback = nullptr;
@@ -49,11 +47,11 @@ public:
   CCCCallback _cccCallback = nullptr;
 
   uint16_t getPermissions() const { return _permissions; }
-  CharProperty getProperties() const { return _properties; }
+  uint8_t getProperties() const { return _properties; }
   const bt_uuid *getUuid() const { return _uuid; }
 
-  int notify(struct bt_conn *conn, const void *data, uint16_t len);
-  int indicate(struct bt_conn *conn, const void *data, uint16_t len);
+  // int notify(struct bt_conn *conn, const void *data, uint16_t len);
+  // int indicate(struct bt_conn *conn, const void *data, uint16_t len);
 
   static ssize_t _readDispatcher(struct bt_conn *conn,
                                  const struct bt_gatt_attr *attr, void *buf,
@@ -66,7 +64,7 @@ public:
 
 private:
   const bt_uuid *_uuid = nullptr;
-  CharProperty _properties = 0;
+  uint8_t _properties = 0;
   char _name[32];
   uint16_t _permissions = 0;
   void *_userData = nullptr;

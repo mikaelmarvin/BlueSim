@@ -1,7 +1,7 @@
 #include "characteristic.hpp"
 
-void Characteristic::init(const bt_uuid *uuid, CharProperty properties,
-                          CharPermission permissions, const char *name = "") {
+void Characteristic::init(const bt_uuid *uuid, uint8_t properties,
+                          uint16_t permissions, const char *name = "") {
   _uuid = uuid;
   _properties = properties;
   _permissions = permissions;
