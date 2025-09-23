@@ -1,12 +1,12 @@
 #pragma once
 
+#include "peripheral.hpp"
 #include <string.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/kernel.h>
-#include <zephyr/sys/slist.h>
 
 #define MAX_CHARACTERISTICS_PER_SERVICE 3
 #define MAX_ATTRIBUTES_PER_SERVICE 3 * MAX_CHARACTERISTICS_PER_SERVICE + 1
@@ -18,7 +18,7 @@ class Service {
 public:
   Service();
   ~Service() = default;
-  void init(const bt_uuid *uuid, const char *name = "");
+  int init(const bt_uuid *uuid, const char *name = "");
 
   int buildService();
   int addCharacteristic(Characteristic *characteristic);

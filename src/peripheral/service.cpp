@@ -1,4 +1,8 @@
 #include "service.hpp"
+#include "characteristic.hpp"
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(SERVICE, LOG_LEVEL_DBG);
 
 Service::Service() {
   memset(_name, 0, sizeof(_name));
@@ -9,66 +13,64 @@ Service::Service() {
   memset(_characteristics, 0, sizeof(_characteristics));
 }
 
-Service::init(const struct bt_uuid *uuid, const char *name = "") {
+int Service::init(const struct bt_uuid *uuid, const char *name) {
   _uuid = uuid;
   memcpy(_name, name, sizeof(_name));
   _name[sizeof(_name) - 1] = '\0';
 
   // Primary Service declaration
-  _attrs[_attrCount++] = {
-      /* Primary Service */
-      .uuid = BT_UUID_GATT_PRIMARY,
-      .perm = BT_GATT_PERM_READ,
-      .read = bt_gatt_attr_read_service,
-      .write = NULL,
-      .user_data = &_uuid,
-  };
+  _attrs[_attrCount].uuid = BT_UUID_GATT_PRIMARY;
+  _attrs[_attrCount].read = bt_gatt_attr_read_service;
+  _attrs[_attrCount].write = NULL;
+  _attrs[_attrCount].user_data = &_uuid;
+  _attrs[_attrCount].perm = BT_GATT_PERM_READ;
+  _attrCount++;
+
+  return 1;
 }
 
 int Service::addCharacteristic(Characteristic *characteristic) {
-  _characteristics[_characteristicCount++] = characteristic;
+  _characteristics[_chrcCount] = characteristic;
 
   // Characteristic Declaration
-  bt_gatt_chrc &chrc = _chrcs[_chrcCount++];
-  chrc = {
-      .uuid = (bt_uuid *)characteristic->getUuid(),
-      .properties = characteristic->getProperties(),
-      .value_handle = 0,
-  };
+  bt_gatt_chrc &chrc = _chrcs[_chrcCount];
+  chrc.uuid = (bt_uuid *)characteristic->getUuid();
+  chrc.properties = characteristic->getProperties();
+  chrc.value_handle = 0;
+  _chrcCount++;
 
-  _attrs[_attrCount++] = {
-      .uuid = BT_UUID_GATT_CHRC,
-      .perm = BT_GATT_PERM_READ,
-      .read = bt_gatt_attr_read_chrc,
-      .write = nullptr,
-      .user_data = &chrc,
-  };
+  _attrs[_attrCount].uuid = BT_UUID_GATT_CHRC;
+  _attrs[_attrCount].perm = BT_GATT_PERM_READ;
+  _attrs[_attrCount].read = bt_gatt_attr_read_chrc;
+  _attrs[_attrCount].write = nullptr;
+  _attrs[_attrCount].user_data = &chrc;
+  _attrCount++;
 
   // Characteristic Value
-  _attrs[_attrCount++] = {
-      .uuid = (bt_uuid *)characteristic->getUuid(),
-      .perm = characteristic->getPermissions(),
-      .read = Characteristic::_readDispatcher,
-      .write = Characteristic::_writeDispatcher,
-      .user_data = characteristic,
-  };
+  _attrs[_attrCount].uuid = (bt_uuid *)characteristic->getUuid();
+  _attrs[_attrCount].perm = characteristic->getPermissions();
+  _attrs[_attrCount].read = Characteristic::_readDispatcher;
+  _attrs[_attrCount].write = Characteristic::_writeDispatcher;
+  _attrs[_attrCount].user_data = characteristic;
+  _attrCount++;
 
   // Optional CCC
   if (characteristic->getProperties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
-    _cccs[_cccCount].cfg_changed = Characteristic::_cccDispatcher,
-    _attrs[_attrCount++] = {
-        .uuid = BT_UUID_GATT_CCC,
-        .perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE,
-        .read = bt_gatt_attr_read_ccc,
-        .write = bt_gatt_attr_write_ccc,
-        .user_data = &_cccs[_cccCount++],
-    };
+    _cccs[_cccCount].cfg_changed = Characteristic::_cccDispatcher;
+    _attrs[_attrCount].uuid = BT_UUID_GATT_CCC;
+    _attrs[_attrCount].perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE;
+    _attrs[_attrCount].read = bt_gatt_attr_read_ccc;
+    _attrs[_attrCount].write = bt_gatt_attr_write_ccc;
+    _attrs[_attrCount].user_data = &_cccs[_cccCount];
+    _attrCount++;
+    _cccCount++;
   }
   return 1;
 }
 
-void Service::buildService() {
+int Service::buildService() {
   _gattService.attrs = _attrs;
   _gattService.attr_count = _attrCount;
+  return 0;
 }

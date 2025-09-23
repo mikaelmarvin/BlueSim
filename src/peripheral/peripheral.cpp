@@ -1,4 +1,5 @@
 #include "peripheral.hpp"
+#include "service.hpp"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(PERIPHERAL, LOG_LEVEL_DBG);

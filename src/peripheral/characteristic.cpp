@@ -1,7 +1,11 @@
 #include "characteristic.hpp"
+#include "peripheral.hpp"
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(CHARACTERISTIC, LOG_LEVEL_DBG);
 
 void Characteristic::init(const bt_uuid *uuid, uint8_t properties,
-                          uint16_t permissions, const char *name = "") {
+                          uint16_t permissions, const char *name) {
   _uuid = uuid;
   _properties = properties;
   _permissions = permissions;
@@ -20,12 +24,12 @@ ssize_t Characteristic::_readDispatcher(struct bt_conn *conn,
   }
 
   Characteristic *self = static_cast<Characteristic *>(attr->user_data);
-  Peripheral *per = Peripheral::fromConn(conn);
 
   if (self->_readCallback) {
-    return self->_readCallback(per, conn, attr, buf, len, offset);
+    return self->_readCallback(conn, attr, buf, len, offset);
   } else {
     LOG_INF("This is the default READ callback");
+    return 0;
   }
 }
 
@@ -39,10 +43,9 @@ ssize_t Characteristic::_writeDispatcher(struct bt_conn *conn,
   }
 
   Characteristic *self = static_cast<Characteristic *>(attr->user_data);
-  Peripheral *p = Peripheral::fromConn(conn);
 
   if (self->_writeCallback) {
-    return self->_writeCallback(per, conn, attr, buf, len, offset, flags);
+    return self->_writeCallback(conn, attr, buf, len, offset, flags);
   } else {
     LOG_INF("This is the default WRITE callback");
   }

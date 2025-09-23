@@ -1,7 +1,6 @@
 #include "peripheral/characteristic.hpp"
 #include "peripheral/peripheral.hpp"
 #include "peripheral/service.hpp"
-#include <cstring>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
@@ -31,8 +30,8 @@ int main() {
   Peripheral p1;
   // Peripheral p2;
 
-  static Service service;
-  static Characteristic readChar, writeChar;
+  Service service;
+  Characteristic readChar, writeChar;
 
   bt_uuid_128 service_uuid = BT_UUID_INIT_128(
       BT_UUID_128_ENCODE(0x6e2f84f2, 0x6f5a, 0x48c4, 0x9873, 0xc77acce33964));
@@ -43,9 +42,9 @@ int main() {
 
   service.init(&service_uuid.uuid, "Custom Service 1");
   readChar.init(&read_uuid.uuid, CharProperty::READ | CharProperty::NOTIFY,
-                CharPermission::READ "Read-notify characteristic");
+                CharPermission::PERM_READ, "Read-notify characteristic");
   writeChar.init(&write_uuid.uuid, CharProperty::WRITE,
-                 "Write-only characteristic");
+                 CharPermission::PERM_WRITE, "Write-only characteristic");
 
   service.addCharacteristic(&readChar);
   service.addCharacteristic(&writeChar);

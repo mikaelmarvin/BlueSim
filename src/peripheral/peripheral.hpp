@@ -1,9 +1,9 @@
+#pragma once
+
 extern "C" {
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 }
-
-#include "service.hpp"
 
 #define MAX_SERVICES_PER_PERIPHERAL 3
 
@@ -12,6 +12,7 @@ struct advertiser_info {
   struct bt_le_ext_adv *adv;
   struct bt_data adv_data[1];
 };
+class Service;
 
 class Peripheral {
 public:
