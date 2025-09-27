@@ -8,8 +8,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/slist.h>
 
-using ReadCallback = ssize_t (*)(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset);
-using WriteCallback = ssize_t (*)(struct bt_conn *conn, const struct bt_gatt_attr *attr, const void *buf, uint16_t len, uint16_t offset, uint8_t flags);
+using ReadCallback = ssize_t (*)(struct bt_conn *conn,
+                                 const struct bt_gatt_attr *attr, void *buf,
+                                 uint16_t len, uint16_t offset);
+using WriteCallback = ssize_t (*)(struct bt_conn *conn,
+                                  const struct bt_gatt_attr *attr,
+                                  const void *buf, uint16_t len,
+                                  uint16_t offset, uint8_t flags);
 // This declaration was taken from bt_gatt_ccc_managed_user_data type
 using CCCCallback = void (*)(const struct bt_gatt_attr *attr, uint16_t value);
 

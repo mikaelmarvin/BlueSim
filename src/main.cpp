@@ -31,6 +31,7 @@ int main() {
   // Peripheral p2;
 
   Service service;
+  LOG_INF("INITIALIZED SERVICE ADDRESS: %p", &service);
   Characteristic readChar, writeChar;
 
   bt_uuid_128 service_uuid = BT_UUID_INIT_128(
@@ -46,8 +47,24 @@ int main() {
   writeChar.init(&write_uuid.uuid, CharProperty::WRITE,
                  CharPermission::PERM_WRITE, "Write-only characteristic");
 
-  service.addCharacteristic(&readChar);
-  service.addCharacteristic(&writeChar);
+  int result = service.addCharacteristic(&readChar);
+  if (result != 1) {
+    LOG_ERR("Failed to add read characteristic (err %d)", result);
+    return -1;
+  }
+
+  result = service.addCharacteristic(&writeChar);
+  if (result != 1) {
+    LOG_ERR("Failed to add write characteristic (err %d)", result);
+    return -1;
+  }
+
+  // Build the service before registering
+  result = service.buildService();
+  if (result != 0) {
+    LOG_ERR("Failed to build service (err %d)", result);
+    return -1;
+  }
 
   // Add services to peripherals
   p1.addService(&service);

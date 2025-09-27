@@ -55,18 +55,33 @@ void Peripheral::addService(Service *service) {
 }
 
 void Peripheral::registerServices() {
-  for (Service *service : _services) {
-    if (service == nullptr) {
-      continue; // skip unused slots
+  LOG_INF("Registering %d services for peripheral %d", _serviceCount, _id);
+  
+  for (int i = 0; i < _serviceCount; ++i) {
+    if (_services[i] == nullptr) {
+      LOG_ERR("Service %d is null, skipping", i);
+      continue;
     }
 
-    int err = bt_gatt_service_register(&service->_gattService);
+    // Validate that the service has been built
+    if (_services[i]->_gattService.attrs == nullptr || _services[i]->_gattService.attr_count == 0) {
+      LOG_ERR("Service '%s' not properly built (attrs=%p, count=%d)", 
+              _services[i]->_name, 
+              _services[i]->_gattService.attrs, 
+              _services[i]->_gattService.attr_count);
+      continue;
+    }
+
+    LOG_INF("Registering service '%s' with %d attributes", 
+            _services[i]->_name, 
+            _services[i]->_gattService.attr_count);
+
+    int err = bt_gatt_service_register(&_services[i]->_gattService);
     if (err) {
-      // Log or handle error depending on your needs
-      LOG_ERR("Failed to register service '%s' (err %d)", service->_name, err);
-      break;
+      LOG_ERR("Failed to register service '%s' (err %d)", _services[i]->_name, err);
+      // Continue with other services instead of breaking
     } else {
-      LOG_INF("Service '%s' registered successfully", service->_name);
+      LOG_INF("Service '%s' registered successfully", _services[i]->_name);
     }
   }
 }

@@ -11,6 +11,7 @@ Service::Service() {
   memset(_chrcs, 0, sizeof(_chrcs));
   memset(_cccs, 0, sizeof(_cccs));
   memset(_characteristics, 0, sizeof(_characteristics));
+  memset(_cccs, 0, sizeof(_cccs));
 }
 
 int Service::init(const struct bt_uuid *uuid, const char *name) {
@@ -57,12 +58,13 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   // Optional CCC
   if (characteristic->getProperties() &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
-    _cccs[_cccCount].cfg_changed = Characteristic::_cccDispatcher;
+    _cccs[_cccCount].ccc.cfg_changed = Characteristic::_cccDispatcher;
+    _cccs[_cccCount].chr = characteristic;
     _attrs[_attrCount].uuid = BT_UUID_GATT_CCC;
     _attrs[_attrCount].perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE;
     _attrs[_attrCount].read = bt_gatt_attr_read_ccc;
     _attrs[_attrCount].write = bt_gatt_attr_write_ccc;
-    _attrs[_attrCount].user_data = &_cccs[_cccCount];
+    _attrs[_attrCount].user_data = &_cccs[_cccCount].ccc;
     _attrCount++;
     _cccCount++;
   }

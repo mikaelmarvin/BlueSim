@@ -8,11 +8,22 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/kernel.h>
 
+// Minimum required attributes are Characteristic declaration, Characteristic
+// value and CCC, the +1 is the one per service Service declaration
+#define NUMBER_OF_STD_ATTR 3
 #define MAX_CHARACTERISTICS_PER_SERVICE 3
-#define MAX_ATTRIBUTES_PER_SERVICE 3 * MAX_CHARACTERISTICS_PER_SERVICE + 1
+#define MAX_ATTRIBUTES_PER_SERVICE                                             \
+  NUMBER_OF_STD_ATTR *MAX_CHARACTERISTICS_PER_SERVICE + 1
 
 class Characteristic;
 class Peripheral;
+
+// Wrapper for a CCC descriptor that stores both Zephyr's CCC state
+// and a pointer to the owning Characteristic for use in the dispatcher.
+struct CccWrapper {
+  Characteristic *chr;
+  bt_gatt_ccc_managed_user_data ccc;
+};
 
 class Service {
 public:
@@ -30,7 +41,7 @@ public:
 private:
   struct bt_gatt_attr _attrs[MAX_ATTRIBUTES_PER_SERVICE];
   struct bt_gatt_chrc _chrcs[MAX_CHARACTERISTICS_PER_SERVICE];
-  struct bt_gatt_ccc_managed_user_data _cccs[MAX_CHARACTERISTICS_PER_SERVICE];
+  struct CccWrapper _cccs[MAX_CHARACTERISTICS_PER_SERVICE];
   Characteristic *_characteristics[MAX_CHARACTERISTICS_PER_SERVICE];
   const struct bt_uuid *_uuid = nullptr;
   uint8_t _attrCount = 0;

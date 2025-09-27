@@ -1,5 +1,6 @@
 #include "characteristic.hpp"
 #include "peripheral.hpp"
+#include "service.hpp"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(CHARACTERISTIC, LOG_LEVEL_DBG);
@@ -28,7 +29,8 @@ ssize_t Characteristic::_readDispatcher(struct bt_conn *conn,
   if (self->_readCallback) {
     return self->_readCallback(conn, attr, buf, len, offset);
   } else {
-    LOG_INF("This is the default READ callback");
+    LOG_INF("This is the default READ callback - returning empty data");
+    // Return 0 to indicate no data to read, but don't write to buf
     return 0;
   }
 }
@@ -55,11 +57,16 @@ ssize_t Characteristic::_writeDispatcher(struct bt_conn *conn,
 
 void Characteristic::_cccDispatcher(const struct bt_gatt_attr *attr,
                                     uint16_t value) {
+  LOG_INF("CCC dispatcher called with value: 0x%04x", value);
+
   if (!attr || !attr->user_data) {
     LOG_ERR("The CCC dispatcher got an unexpected nullptr");
+    return;
   }
 
-  Characteristic *self = static_cast<Characteristic *>(attr->user_data);
+  bt_gatt_ccc *ccc = static_cast<bt_gatt_ccc *>(attr->user_data);
+  CccWrapper *wrapper = CONTAINER_OF(ccc, CccWrapper, ccc);
+  Characteristic *self = wrapper->chr;
 
   if (self->_cccCallback) {
     return self->_cccCallback(attr, value);
