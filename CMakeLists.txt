@@ -9,4 +9,6 @@ project(BlueSim CXX)
 target_sources(app PRIVATE
     src/main.cpp
     src/peripheral/peripheral.cpp
+    src/peripheral/service.cpp
+    src/peripheral/characteristic.cpp
 )

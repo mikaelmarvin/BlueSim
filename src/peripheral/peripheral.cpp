@@ -1,4 +1,5 @@
 #include "peripheral.hpp"
+#include "service.hpp"
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(PERIPHERAL, LOG_LEVEL_DBG);
@@ -6,7 +7,8 @@ LOG_MODULE_REGISTER(PERIPHERAL, LOG_LEVEL_DBG);
 // Static array
 Peripheral *Peripheral::registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET] = {nullptr};
 
-Peripheral::Peripheral() : _conn(nullptr) {
+Peripheral::Peripheral() : _conn(nullptr), _serviceCount(0) {
+  memset(_services, 0, sizeof(_services));
   struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
       BT_LE_ADV_OPT_EXT_ADV | BT_LE_ADV_OPT_CONN, BT_GAP_ADV_FAST_INT_MIN_2,
       BT_GAP_ADV_FAST_INT_MAX_2, nullptr);
@@ -46,7 +48,45 @@ int Peripheral::start() {
   return err;
 }
 
-void Peripheral::submit_advertiser() {
+void Peripheral::addService(Service *service) {
+  // Add checks later
+  service->_peripheral = this;
+  _services[_serviceCount++] = service;
+}
+
+void Peripheral::registerServices() {
+  LOG_INF("Registering %d services for peripheral %d", _serviceCount, _id);
+  
+  for (int i = 0; i < _serviceCount; ++i) {
+    if (_services[i] == nullptr) {
+      LOG_ERR("Service %d is null, skipping", i);
+      continue;
+    }
+
+    // Validate that the service has been built
+    if (_services[i]->_gattService.attrs == nullptr || _services[i]->_gattService.attr_count == 0) {
+      LOG_ERR("Service '%s' not properly built (attrs=%p, count=%d)", 
+              _services[i]->_name, 
+              _services[i]->_gattService.attrs, 
+              _services[i]->_gattService.attr_count);
+      continue;
+    }
+
+    LOG_INF("Registering service '%s' with %d attributes", 
+            _services[i]->_name, 
+            _services[i]->_gattService.attr_count);
+
+    int err = bt_gatt_service_register(&_services[i]->_gattService);
+    if (err) {
+      LOG_ERR("Failed to register service '%s' (err %d)", _services[i]->_name, err);
+      // Continue with other services instead of breaking
+    } else {
+      LOG_INF("Service '%s' registered successfully", _services[i]->_name);
+    }
+  }
+}
+
+void Peripheral::submitAdvertiser() {
 
   if (_advert.adv) {
     int err = bt_le_ext_adv_start(_advert.adv, BT_LE_EXT_ADV_START_DEFAULT);
@@ -76,7 +116,7 @@ void Peripheral::workHandler(struct k_work *work) {
   Peripheral *self = CONTAINER_OF(work, Peripheral, _advert.work);
 
   // Call the instance method to perform work
-  self->submit_advertiser();
+  self->submitAdvertiser();
 }
 
 // Utility function to map the peripheral from which the connection is coming
@@ -99,7 +139,7 @@ void Peripheral::bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
     uint8_t id = info.id; // This is the local identity (same as adv_param.id)
     Peripheral *p = Peripheral::registry[id];
     if (p) {
-      p->_conn = conn;
+      p->_conn = bt_conn_ref(conn);
       p->onConnected(conn);
       return;
     }
@@ -109,6 +149,8 @@ void Peripheral::bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
 void Peripheral::bt_conn_cb_disconnected(struct bt_conn *conn, uint8_t reason) {
   Peripheral *p = Peripheral::fromConn(conn);
   if (p) {
+    bt_conn_unref(p->_conn);
+    p->_conn = nullptr;
     p->onDisconnected(conn, reason);
   } else {
     LOG_WRN("Disconnected connection not associated with any peripheral");
