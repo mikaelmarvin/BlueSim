@@ -1,12 +1,13 @@
 #pragma once
 
+extern "C" {
 #include <string.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/kernel.h>
-#include <zephyr/sys/slist.h>
+}
 
 using ReadCallback = ssize_t (*)(struct bt_conn *conn,
                                  const struct bt_gatt_attr *attr, void *buf,
@@ -51,10 +52,6 @@ public:
   WriteCallback _writeCallback = nullptr;
   CCCCallback _cccCallback = nullptr;
 
-  uint16_t getPermissions() const { return _permissions; }
-  uint8_t getProperties() const { return _properties; }
-  const bt_uuid *getUuid() const { return _uuid; }
-
   // int notify(struct bt_conn *conn, const void *data, uint16_t len);
   // int indicate(struct bt_conn *conn, const void *data, uint16_t len);
 
@@ -67,7 +64,6 @@ public:
                                   uint16_t offset, uint8_t flags);
   static void _cccDispatcher(const struct bt_gatt_attr *attr, uint16_t value);
 
-private:
   const bt_uuid *_uuid = nullptr;
   uint8_t _properties = 0;
   char _name[32];

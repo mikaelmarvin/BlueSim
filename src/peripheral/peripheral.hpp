@@ -7,11 +7,6 @@ extern "C" {
 
 #define MAX_SERVICES_PER_PERIPHERAL 3
 
-struct advertiser_info {
-  struct k_work work;
-  struct bt_le_ext_adv *adv;
-  struct bt_data adv_data[1];
-};
 class Service;
 
 class Peripheral {
@@ -19,34 +14,23 @@ public:
   Peripheral();
   virtual ~Peripheral();
 
-  // Called when this peripheral got connected/disconnected
   virtual void onConnected(struct bt_conn *conn);
   virtual void onDisconnected(struct bt_conn *conn, uint8_t reason);
 
-  // Start advertising
-  int start();
   void addService(Service *service);
   void registerServices();
 
-  // Static global connection callbacks
+  // Static functions and variables
+  static Peripheral *registry[8]; // Reduced size since we're not using advertising IDs
   static void bt_conn_cb_connected(struct bt_conn *conn, uint8_t err);
   static void bt_conn_cb_disconnected(struct bt_conn *conn, uint8_t reason);
-
-  // Static work handler: required because k_work cannot call non-static member
-  // functions
-  static void workHandler(struct k_work *work);
 
   // Map bt_conn back to Peripheral
   static Peripheral *fromConn(struct bt_conn *conn);
 
 private:
-  void submitAdvertiser();
-
   uint8_t _id;
-  struct advertiser_info _advert;
   struct bt_conn *_conn;
   Service *_services[MAX_SERVICES_PER_PERIPHERAL];
   uint8_t _serviceCount;
-
-  static Peripheral *registry[CONFIG_BT_EXT_ADV_MAX_ADV_SET];
 };
