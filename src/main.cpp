@@ -1,14 +1,15 @@
+#include "peripheral/advertisement.hpp"
 #include "peripheral/characteristic.hpp"
 #include "peripheral/peripheral.hpp"
 #include "peripheral/service.hpp"
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
-
 extern "C" {
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
 }
+
+LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
 static struct bt_conn_cb global_conn_cb = {
     .connected = Peripheral::bt_conn_cb_connected,
@@ -28,10 +29,16 @@ int main() {
   LOG_INF("Bluetooth initialized");
 
   Peripheral p1;
-  // Peripheral p2;
+
+  // Initialize advertisement directly
+  Advertisement advertisement;
+  int init_result = advertisement.init("Simulator");
+  if (init_result) {
+    LOG_ERR("Failed to initialize advertisement (err %d)", init_result);
+    return init_result;
+  }
 
   Service service;
-  LOG_INF("INITIALIZED SERVICE ADDRESS: %p", &service);
   Characteristic readChar, writeChar;
 
   bt_uuid_128 service_uuid = BT_UUID_INIT_128(
@@ -70,8 +77,12 @@ int main() {
   p1.addService(&service);
   p1.registerServices();
 
-  p1.start();
-  // p2.start();
+  // Start advertising
+  int advertising_result = advertisement.startAdvertising();
+  if (advertising_result) {
+    LOG_ERR("Failed to start advertising (err %d)", advertising_result);
+    return advertising_result;
+  }
 
   // Main loop (Zephyr threads will handle advertising & connections)
   while (true) {

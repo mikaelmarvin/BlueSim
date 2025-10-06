@@ -35,8 +35,8 @@ int Service::addCharacteristic(Characteristic *characteristic) {
 
   // Characteristic Declaration
   bt_gatt_chrc &chrc = _chrcs[_chrcCount];
-  chrc.uuid = (bt_uuid *)characteristic->getUuid();
-  chrc.properties = characteristic->getProperties();
+  chrc.uuid = (bt_uuid *)characteristic->_uuid;
+  chrc.properties = characteristic->_properties;
   chrc.value_handle = 0;
   _chrcCount++;
 
@@ -48,15 +48,15 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   _attrCount++;
 
   // Characteristic Value
-  _attrs[_attrCount].uuid = (bt_uuid *)characteristic->getUuid();
-  _attrs[_attrCount].perm = characteristic->getPermissions();
+  _attrs[_attrCount].uuid = (bt_uuid *)characteristic->_uuid;
+  _attrs[_attrCount].perm = characteristic->_permissions;
   _attrs[_attrCount].read = Characteristic::_readDispatcher;
   _attrs[_attrCount].write = Characteristic::_writeDispatcher;
   _attrs[_attrCount].user_data = characteristic;
   _attrCount++;
 
   // Optional CCC
-  if (characteristic->getProperties() &
+  if (characteristic->_properties &
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
     _cccs[_cccCount].ccc.cfg_changed = Characteristic::_cccDispatcher;
     _cccs[_cccCount].chr = characteristic;
