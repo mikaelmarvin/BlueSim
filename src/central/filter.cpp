@@ -4,11 +4,10 @@
 
 LOG_MODULE_REGISTER(FILTER, LOG_LEVEL_DBG);
 
-Filter::Filter() : _isActive(false), _operator(FilterOperator::NONE) {}
+Filter::Filter() : _operator(FilterOperator::NONE) {}
 
 Filter &Filter::operator=(const Filter &other) {
   if (this != &other) {
-    _isActive = other._isActive;
     _operator = other._operator;
 
     _localNameFilter.enabled = other._localNameFilter.enabled;
@@ -64,10 +63,6 @@ void Filter::setManufacturerDataPattern(const char *pattern) {
 
 bool Filter::matchesDevice(const bt_addr_le_t *addr, int8_t rssi,
                            uint8_t adv_type, struct net_buf_simple *buf) const {
-  if (!_isActive) {
-    return false;
-  }
-
   // Check if any filters are enabled
   bool hasEnabledFilters =
       _localNameFilter.enabled || _manufacturerDataFilter.enabled;

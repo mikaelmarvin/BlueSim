@@ -5,20 +5,18 @@
 extern "C" {
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
+#include <zephyr/kernel.h>
 }
 
 #define MAX_CENTRALS                                                           \
-  (CONFIG_BT_MAX_CONN - CONFIG_BT_CTLR_SDC_PERIPHERAL_COUNT) / 2
-#define MAX_CENTRAL_CONNECTIONS CONFIG_BT_MAX_CONN / 2
+  ((CONFIG_BT_MAX_CONN - CONFIG_BT_CTLR_SDC_PERIPHERAL_COUNT) / 2)
+#define MAX_CENTRAL_CONNECTIONS ((CONFIG_BT_MAX_CONN / 2) / MAX_CENTRALS)
 
 class Central {
 public:
   Central();
   virtual ~Central();
 
-  int startScanning() { return _scanner.startScanning(); }
-  int stopScanning() { return _scanner.stopScanning(); }
-  void onConnectionSuccess() { _scanner.stopScanning(); }
   int connectToDevice(const bt_addr_le_t *addr);
   int disconnectFromDevice(const bt_addr_le_t *addr);
   void addConnection(struct bt_conn *conn);
@@ -29,6 +27,11 @@ public:
   virtual void onConnected(struct bt_conn *conn, uint8_t err);
   virtual void onDisconnected(struct bt_conn *conn, uint8_t reason);
 
+  // Work item methods for deferred scanning operations
+  static void scanWorkAction(struct k_work *work);
+  void scheduleScanningStart();
+  void scheduleScanningStop();
+
   static Central *registry[MAX_CENTRALS];
   static Central *fromConn(struct bt_conn *conn);
 
@@ -37,5 +40,10 @@ public:
   struct bt_conn *_connections[MAX_CENTRAL_CONNECTIONS];
 
 private:
+  int startScanning() { return _scanner.startScanning(); }
+  int stopScanning() { return _scanner.stopScanning(); }
+
   Scanner _scanner;
+  struct k_work_delayable _scanWork;
+  bool _shouldStartScanning;
 };

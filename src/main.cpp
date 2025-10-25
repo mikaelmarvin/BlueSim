@@ -14,11 +14,6 @@ LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
 // Global connection callbacks that dispatch to appropriate instances
 static void global_bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
-  if (err) {
-    LOG_ERR("Connection failed (err %d)", err);
-    return;
-  }
-
   struct bt_conn_info info;
   if (bt_conn_get_info(conn, &info) == 0) {
     if (info.role == BT_CONN_ROLE_PERIPHERAL) {
@@ -29,6 +24,7 @@ static void global_bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
             return;
           }
         }
+
         LOG_WRN("No available peripheral found for connection %d", info.id);
       }
     } else if (info.role == BT_CONN_ROLE_CENTRAL) {
@@ -99,7 +95,7 @@ int main() {
   filter.enableLocalNameFilter(true);
 
   c1.addFilter(filter);
-  c1.startScanning();
+  c1.scheduleScanningStart();
 
   // // Initialize advertisement
   // Advertisement advertisement;
