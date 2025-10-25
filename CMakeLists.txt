@@ -8,6 +8,9 @@ project(BlueSim CXX)
 # Add your sources
 target_sources(app PRIVATE
     src/main.cpp
+    src/central/central.cpp
+    src/central/scanner.cpp
+    src/central/filter.cpp
     src/peripheral/advertisement.cpp
     src/peripheral/peripheral.cpp
     src/peripheral/service.cpp

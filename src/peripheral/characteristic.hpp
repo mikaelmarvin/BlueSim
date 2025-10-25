@@ -69,6 +69,6 @@ public:
   char _name[32];
   uint16_t _permissions = 0;
   void *_userData = nullptr;
-  bool _notifications_enabled = false;
-  bool _indications_enabled = false;
+  bool _notificationsEnabled = false;
+  bool _indicationsEnabled = false;
 };

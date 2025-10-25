@@ -76,14 +76,14 @@ void Characteristic::_cccDispatcher(const struct bt_gatt_attr *attr,
   // If for example, the peripheral is connected to multiple centrals, the
   // enabled attributes will be changed by any connection
   // TODO: Expand for multiple connections in the future
-  self->_notifications_enabled = (value & BT_GATT_CCC_NOTIFY);
-  self->_indications_enabled = (value & BT_GATT_CCC_INDICATE);
+  self->_notificationsEnabled = (value & BT_GATT_CCC_NOTIFY);
+  self->_indicationsEnabled = (value & BT_GATT_CCC_INDICATE);
 
-  if (self->_notifications_enabled) {
+  if (self->_notificationsEnabled) {
     LOG_INF("Default CCC callback: Notifications enabled");
   }
 
-  if (self->_indications_enabled) {
+  if (self->_indicationsEnabled) {
     LOG_INF("Default CCC callback: Indications enabled");
   }
 
