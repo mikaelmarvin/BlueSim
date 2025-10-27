@@ -8,7 +8,29 @@ Central *Central::registry[MAX_CENTRALS] = {nullptr};
 
 Central::Central()
     : _index(0), _connectionCount(0), _scanner(this),
-      _shouldStartScanning(false) {
+      _shouldStartScanning(false), _maxConnections(MAX_CENTRAL_CONNECTIONS) {
+  // Initialize the work item
+  k_work_init_delayable(&_scanWork, scanWorkAction);
+  for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
+    _connections[i] = nullptr;
+  }
+
+  for (uint8_t i = 0; i < MAX_CENTRALS; i++) {
+    if (!registry[i]) {
+      _index = i;
+      registry[_index] = this;
+      return;
+    }
+  }
+
+  LOG_ERR("Central registry is full! Maximum %d centrals allowed.",
+          MAX_CENTRALS);
+  __ASSERT(false, "Failed to create a Central - registry full");
+}
+
+Central::Central(uint8_t max_connections)
+    : _index(0), _connectionCount(0), _scanner(this),
+      _shouldStartScanning(false), _maxConnections(max_connections) {
   // Initialize the work item
   k_work_init_delayable(&_scanWork, scanWorkAction);
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
@@ -38,22 +60,29 @@ Central::~Central() {
   }
 }
 
-int Central::connectToDevice(const bt_addr_le_t *addr) {
+bool Central::isConnectedTo(const bt_addr_le_t *addr) {
   // Check if we already have a connection to this device
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
     if (_connections[i]) {
       const bt_addr_le_t *device_addr = bt_conn_get_dst(_connections[i]);
       if (bt_addr_le_cmp(device_addr, addr) == 0) {
-        LOG_DBG("Central %d: Already connected to device", _index);
-        return 0;
+        return true;
       }
     }
+  } 
+  // No connection exists
+  return false;
+}
+
+int Central::connectToDevice(const bt_addr_le_t *addr) {
+  if (isConnectedTo(addr)) {
+    return 0; 
   }
 
   // Check if we have available connection slots
-  if (_connectionCount >= MAX_CENTRAL_CONNECTIONS) {
+  if (_connectionCount >= _maxConnections) {
     LOG_WRN("Central %d: No available connection slots (%d/%d)", _index,
-            _connectionCount, MAX_CENTRAL_CONNECTIONS);
+            _connectionCount, _maxConnections);
     return -ENOMEM;
   }
 
@@ -125,7 +154,7 @@ void Central::addConnection(struct bt_conn *conn) {
       _connections[i] = conn;
       _connectionCount++;
       LOG_INF("Central %d: Added connection %p to slot %d (total: %d/%d)",
-              _index, conn, i, _connectionCount, MAX_CENTRAL_CONNECTIONS);
+              _index, conn, i, _connectionCount, _maxConnections);
       return;
     }
   }
@@ -139,7 +168,7 @@ void Central::removeConnection(struct bt_conn *conn) {
       _connections[i] = nullptr;
       _connectionCount--;
       LOG_INF("Central %d: Removed connection %p from slot %d (total: %d/%d)",
-              _index, conn, i, _connectionCount, MAX_CENTRAL_CONNECTIONS);
+              _index, conn, i, _connectionCount, _maxConnections);
       return;
     }
   }
@@ -158,8 +187,17 @@ void Central::onConnected(struct bt_conn *conn, uint8_t err) {
   LOG_INF("Central %d connected! conn=%p, total connections: %d", _index, conn,
           _connectionCount);
 
-  // Schedule scanning stop after successful connection
-  scheduleScanningStop();
+  // Schedule scanning stop after successful connection if maximum number of
+  // connections is reached
+  if (_connectionCount >= _maxConnections) {
+    LOG_INF("Central %d: Maximum number of connections reached (%d/%d), "
+            "stopping scanning",
+            _index, _connectionCount, _maxConnections);
+    scheduleScanningStop();
+  } else {
+    scheduleScanningStart();
+    return;
+  }
 }
 
 void Central::onDisconnected(struct bt_conn *conn, uint8_t reason) {

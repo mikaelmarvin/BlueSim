@@ -91,10 +91,12 @@ int main() {
   Central c1;
 
   Filter filter;
-  filter.setLocalNamePattern("Mikael");
-  filter.enableLocalNameFilter(true);
-
+  filter.addGroup();
+  filter.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael1");
+  filter.addGroup();
+  filter.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael2");
   c1.addFilter(filter);
+
   c1.scheduleScanningStart();
 
   // // Initialize advertisement

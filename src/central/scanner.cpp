@@ -27,7 +27,6 @@ Scanner::~Scanner() { Scanner::registry[_index] = nullptr; }
 
 void Scanner::addFilter(const Filter &filter) {
   _filter = filter;
-  _filter.setActive(true);
   LOG_INF("Filter added");
 }
 
@@ -100,12 +99,20 @@ void Scanner::scanCallback(const bt_addr_le_t *addr, int8_t rssi,
       LOG_INF("Filter matched for Central %d, initiating connection",
               scanner->_owner->_index);
 
+      // check if the matched device is already connected
+      if(scanner->_owner->isConnectedTo(addr)){
+        continue;
+      }
+
       // Stop scanning before connection attempt
       int stop_err = Scanner::stopStackScanning();
       if (stop_err < 0) {
         LOG_ERR("Failed to stop scanning for connection (err %d)", stop_err);
         return;
       }
+
+      // Must reflect what is happening to later turn scanning on if needed
+      scanner->_isScanning = false;
 
       // Attempt connection
       int conn_err = scanner->_owner->connectToDevice(addr);
