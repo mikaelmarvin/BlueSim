@@ -31,17 +31,15 @@ public:
 
   int startScanning();
   int stopScanning();
-
   void addFilter(const Filter &filter);
-  bool hasActiveFilters() const { return _filter.isActive(); }
-
-  // Work item methods for connection handling
-  static void connectionWorkAction(struct k_work *work);
-  void initiateConnection(const bt_addr_le_t *addr);
 
   static void scanCallback(const bt_addr_le_t *addr, int8_t rssi,
                            uint8_t adv_type, struct net_buf_simple *buf);
   static struct bt_le_scan_param scanParameters;
+  static bool isStackScanning;
+  static int startStackScanning();
+  static int stopStackScanning();
+
   uint8_t _index;
   bool _isScanning;
   Filter _filter;

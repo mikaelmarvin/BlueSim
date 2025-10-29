@@ -1,4 +1,5 @@
 #include "central/central.hpp"
+#include "central/filter.hpp"
 #include "peripheral/advertisement.hpp"
 #include "peripheral/characteristic.hpp"
 #include "peripheral/peripheral.hpp"
@@ -14,11 +15,6 @@ LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_DBG);
 
 // Global connection callbacks that dispatch to appropriate instances
 static void global_bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
-  if (err) {
-    LOG_ERR("Connection failed (err %d)", err);
-    return;
-  }
-
   struct bt_conn_info info;
   if (bt_conn_get_info(conn, &info) == 0) {
     if (info.role == BT_CONN_ROLE_PERIPHERAL) {
@@ -29,6 +25,7 @@ static void global_bt_conn_cb_connected(struct bt_conn *conn, uint8_t err) {
             return;
           }
         }
+
         LOG_WRN("No available peripheral found for connection %d", info.id);
       }
     } else if (info.role == BT_CONN_ROLE_CENTRAL) {
@@ -93,13 +90,20 @@ int main() {
 
   // Peripheral p1;
   Central c1;
+  Central c2;
 
-  Filter filter;
-  filter.setLocalNamePattern("Mikael");
-  filter.enableLocalNameFilter(true);
+  Filter filter1;
+  filter1.addGroup();
+  filter1.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael1");
+  c1.addFilter(filter1);
 
-  c1.addFilter(filter);
-  c1.startScanning();
+  Filter filter2;
+  filter2.addGroup();
+  filter2.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael2");
+  c2.addFilter(filter2);
+
+  c1.scheduleScanningStart();
+  c2.scheduleScanningStart();
 
   // // Initialize advertisement
   // Advertisement advertisement;

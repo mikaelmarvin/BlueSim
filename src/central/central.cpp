@@ -6,7 +6,33 @@ LOG_MODULE_REGISTER(CENTRAL, LOG_LEVEL_DBG);
 // Static registry for Central instances
 Central *Central::registry[MAX_CENTRALS] = {nullptr};
 
-Central::Central() : _index(0), _connectionCount(0), _scanner(this) {
+Central::Central()
+    : _index(0), _connectionCount(0), _scanner(this),
+      _shouldStartScanning(false), _maxConnections(MAX_CENTRAL_CONNECTIONS) {
+  // Initialize the work item
+  k_work_init_delayable(&_scanWork, scanWorkAction);
+  for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
+    _connections[i] = nullptr;
+  }
+
+  for (uint8_t i = 0; i < MAX_CENTRALS; i++) {
+    if (!registry[i]) {
+      _index = i;
+      registry[_index] = this;
+      return;
+    }
+  }
+
+  LOG_ERR("Central registry is full! Maximum %d centrals allowed.",
+          MAX_CENTRALS);
+  __ASSERT(false, "Failed to create a Central - registry full");
+}
+
+Central::Central(uint8_t max_connections)
+    : _index(0), _connectionCount(0), _scanner(this),
+      _shouldStartScanning(false), _maxConnections(max_connections) {
+  // Initialize the work item
+  k_work_init_delayable(&_scanWork, scanWorkAction);
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
     _connections[i] = nullptr;
   }
@@ -34,22 +60,29 @@ Central::~Central() {
   }
 }
 
-int Central::connectToDevice(const bt_addr_le_t *addr) {
+bool Central::isConnectedTo(const bt_addr_le_t *addr) {
   // Check if we already have a connection to this device
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
     if (_connections[i]) {
       const bt_addr_le_t *device_addr = bt_conn_get_dst(_connections[i]);
       if (bt_addr_le_cmp(device_addr, addr) == 0) {
-        LOG_DBG("Central %d: Already connected to device", _index);
-        return 0; // Already connected
+        return true;
       }
     }
   }
+  // No connection exists
+  return false;
+}
+
+int Central::connectToDevice(const bt_addr_le_t *addr) {
+  if (isConnectedTo(addr)) {
+    return 0;
+  }
 
   // Check if we have available connection slots
-  if (_connectionCount >= MAX_CENTRAL_CONNECTIONS) {
-    LOG_WRN("Central %d: No available connection slots (%d/%d)", 
-            _index, _connectionCount, MAX_CENTRAL_CONNECTIONS);
+  if (_connectionCount >= _maxConnections) {
+    LOG_WRN("Central %d: No available connection slots (%d/%d)", _index,
+            _connectionCount, _maxConnections);
     return -ENOMEM;
   }
 
@@ -79,10 +112,9 @@ int Central::connectToDevice(const bt_addr_le_t *addr) {
     return err;
   }
 
-  bt_conn_ref(conn);
   addConnection(conn);
 
-  LOG_INF("Central %d initiating connection to device", _index);
+  LOG_INF("Central %d created connection stack connection object", _index);
   return 0;
 }
 
@@ -118,10 +150,11 @@ int Central::disconnectFromDevice(const bt_addr_le_t *addr) {
 void Central::addConnection(struct bt_conn *conn) {
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
     if (_connections[i] == nullptr) {
+      bt_conn_ref(conn);
       _connections[i] = conn;
       _connectionCount++;
-      LOG_INF("Central %d: Added connection %p to slot %d (total: %d/%d)", 
-              _index, conn, i, _connectionCount, MAX_CENTRAL_CONNECTIONS);
+      LOG_INF("Central %d: Added connection %p to slot %d (total: %d/%d)",
+              _index, conn, i, _connectionCount, _maxConnections);
       return;
     }
   }
@@ -131,8 +164,11 @@ void Central::addConnection(struct bt_conn *conn) {
 void Central::removeConnection(struct bt_conn *conn) {
   for (uint8_t i = 0; i < MAX_CENTRAL_CONNECTIONS; i++) {
     if (_connections[i] == conn) {
+      bt_conn_unref(_connections[i]);
       _connections[i] = nullptr;
       _connectionCount--;
+      LOG_INF("Central %d: Removed connection %p from slot %d (total: %d/%d)",
+              _index, conn, i, _connectionCount, _maxConnections);
       return;
     }
   }
@@ -142,35 +178,34 @@ void Central::removeConnection(struct bt_conn *conn) {
 void Central::onConnected(struct bt_conn *conn, uint8_t err) {
   if (err) {
     LOG_ERR("Central %d connection failed (err %d)", _index, err);
-    // Force restart scanning on connection failure
-    int scan_err = bt_le_scan_start(&Scanner::scanParameters, &Scanner::scanCallback);
-    if (scan_err < 0) {
-      LOG_ERR("Central %d: Failed to restart Zephyr scanning (err %d)", _index, scan_err);
-    } else {
-      LOG_INF("Central %d: Force restarted Zephyr scanning after connection failure", _index);
-      _scanner._isScanning = true;
-    }
+    removeConnection(conn);
+    // Schedule scanning start after connection failure
+    scheduleScanningStart();
     return;
   }
-  
-  LOG_INF("Central %d connected! conn=%p, total connections: %d", _index, conn, _connectionCount);
-  
-  // Stop scanning on successful connection
-  onConnectionSuccess();
+
+  LOG_INF("Central %d connected! conn=%p, total connections: %d", _index, conn,
+          _connectionCount);
+
+  // Schedule scanning stop after successful connection if maximum number of
+  // connections is reached
+  if (_connectionCount >= _maxConnections) {
+    LOG_INF("Central %d: Maximum number of connections reached (%d/%d), "
+            "stopping scanning",
+            _index, _connectionCount, _maxConnections);
+    scheduleScanningStop();
+  } else {
+    scheduleScanningStart();
+    return;
+  }
 }
 
 void Central::onDisconnected(struct bt_conn *conn, uint8_t reason) {
   LOG_DBG("Central %d disconnected (reason %u)\n", _index, reason);
   removeConnection(conn);
-  
-  // Force restart scanning when disconnected
-  int scan_err = bt_le_scan_start(&Scanner::scanParameters, &Scanner::scanCallback);
-  if (scan_err < 0) {
-    LOG_ERR("Central %d: Failed to restart Zephyr scanning (err %d)", _index, scan_err);
-  } else {
-    LOG_INF("Central %d: Force restarted Zephyr scanning after disconnection", _index);
-    _scanner._isScanning = true;
-  }
+
+  // Schedule scanning start after disconnection
+  scheduleScanningStart();
 }
 
 Central *Central::fromConn(struct bt_conn *conn) {
@@ -187,4 +222,51 @@ Central *Central::fromConn(struct bt_conn *conn) {
 
   LOG_WRN("Failed to find Central for connection %p", conn);
   return nullptr;
+}
+
+void Central::scheduleScanningStart() {
+  _shouldStartScanning = true;
+  int err = k_work_reschedule(&_scanWork, K_MSEC(200));
+  if (err < 0) {
+    LOG_ERR("Central %d: Failed to schedule scanning start work item (err %d)",
+            _index, err);
+  } else {
+    LOG_INF("Central %d: Scheduled scanning start work item", _index);
+  }
+}
+
+void Central::scheduleScanningStop() {
+  _shouldStartScanning = false;
+  int err = k_work_reschedule(&_scanWork, K_MSEC(200));
+  if (err < 0) {
+    LOG_ERR("Central %d: Failed to schedule scanning stop work item (err %d)",
+            _index, err);
+  } else {
+    LOG_INF("Central %d: Scheduled scanning stop work item", _index);
+  }
+}
+
+void Central::scanWorkAction(struct k_work *work) {
+  // Recover the Central instance from the k_work pointer
+  Central *self = CONTAINER_OF(work, Central, _scanWork);
+
+  if (self->_shouldStartScanning) {
+    LOG_INF("Central %d: Executing deferred scanning start", self->_index);
+    int err = self->startScanning();
+    if (err < 0) {
+      LOG_ERR("Central %d: Failed to start scanning (err %d)", self->_index,
+              err);
+    } else {
+      LOG_INF("Central %d: Successfully started scanning", self->_index);
+    }
+  } else {
+    LOG_INF("Central %d: Executing deferred scanning stop", self->_index);
+    int err = self->stopScanning();
+    if (err < 0) {
+      LOG_ERR("Central %d: Failed to stop scanning (err %d)", self->_index,
+              err);
+    } else {
+      LOG_INF("Central %d: Successfully stopped scanning", self->_index);
+    }
+  }
 }

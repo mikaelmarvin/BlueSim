@@ -13,16 +13,41 @@ extern "C" {
 #define MAX_PATTERN_LENGTH 64
 #define MAX_MANUFACTURER_DATA_LENGTH 32
 #define MAX_LOCAL_NAME_LENGTH 32
+#define MAX_CRITERIA_PER_GROUP 4
+#define MAX_FILTER_GROUPS 4
 
 // Logical operators for combining filter conditions
-enum class FilterOperator { AND, OR, NONE };
+enum class FilterOperator { AND, OR };
 
-// Individual filter conditions
-struct FilterCondition {
-  bool enabled;
+// Field types that can be filtered
+enum class FilterCriterionType {
+  LOCAL_NAME,         // Match against device local name
+  MANUFACTURER_DATA,  // Match against manufacturer data
+  SERVICE_UUID,       // Match against service UUID in advertisement
+  CHARACTERISTIC_UUID // Match against characteristic UUID in advertisement
+};
+
+// Individual filter criterion (field check)
+struct FilterCriterion {
+  FilterCriterionType type;
   char pattern[MAX_PATTERN_LENGTH];
+  bool enabled;
 
-  FilterCondition() : enabled(false) { pattern[0] = '\0'; }
+  FilterCriterion()
+      : type(FilterCriterionType::LOCAL_NAME), enabled(false) {
+    pattern[0] = '\0';
+  }
+};
+
+// A filter group containing multiple criteria
+struct FilterGroup {
+  FilterCriterion criteria[MAX_CRITERIA_PER_GROUP];
+  uint8_t criteria_count;
+  FilterOperator operator_between; // How to combine criteria in this group
+  bool enabled;
+
+  FilterGroup() : criteria_count(0), operator_between(FilterOperator::AND),
+                  enabled(true) {}
 };
 
 class Filter {
@@ -31,52 +56,46 @@ public:
   Filter &operator=(const Filter &other);
   ~Filter() = default;
 
-  // Enable/disable the entire filter
-  void setActive(bool active) { _isActive = active; }
-  bool isActive() const { return _isActive; }
+  // Main API: Add criteria to current group and create new groups
+  void addGroup();
+  void addCriterion(FilterCriterionType type, const char *pattern);
+  void setGroupOperator(FilterOperator op); // Set operator for current group
+ 
 
-  // Local name filtering
-  void setLocalNamePattern(const char *pattern);
-  void enableLocalNameFilter(bool enable) { _localNameFilter.enabled = enable; }
-  bool isLocalNameFilterEnabled() const { return _localNameFilter.enabled; }
-
-  // Manufacturer data filtering
-  void setManufacturerDataPattern(const char *pattern);
-  void enableManufacturerDataFilter(bool enable) {
-    _manufacturerDataFilter.enabled = enable;
-  }
-  bool isManufacturerDataFilterEnabled() const {
-    return _manufacturerDataFilter.enabled;
-  }
-
-  // Logical operator for combining conditions
-  void setOperator(FilterOperator op) { _operator = op; }
-  FilterOperator getOperator() const { return _operator; }
-
-  // Main matching function
   bool matchesDevice(const bt_addr_le_t *addr, int8_t rssi, uint8_t adv_type,
                      struct net_buf_simple *buf) const;
 
-  // Validation methods
   bool validatePattern(const char *pattern) const;
   bool isValid() const;
 
 private:
-  bool _isActive;
-  FilterOperator _operator;
-
-  // Individual filter conditions
-  FilterCondition _localNameFilter;
-  FilterCondition _manufacturerDataFilter;
+  FilterGroup _groups[MAX_FILTER_GROUPS];
+  uint8_t _group_count;
+  uint8_t _current_group_index;
 
   // Internal matching functions
-  bool matchesLocalName(struct net_buf_simple *buf) const;
-  bool matchesManufacturerData(struct net_buf_simple *buf) const;
+  bool matchesCriterion(const FilterCriterion &criterion,
+                        struct net_buf_simple *buf) const;
+  bool evaluateGroup(const FilterGroup &group,
+                     struct net_buf_simple *buf) const;
   bool matchesPattern(const char *data, size_t data_len,
                       const char *pattern) const;
 
   // Advertisement data parsing
   bool parseAdvertisementData(struct net_buf_simple *buf, char *local_name,
                               size_t name_size, uint8_t *manufacturer_data,
-                              size_t mfg_data_size) const;
+                              size_t mfg_data_size, uint8_t *service_uuid,
+                              size_t service_uuid_size,
+                              uint8_t *characteristic_uuid,
+                              size_t characteristic_uuid_size) const;
+
+  // Helper functions to extract specific fields
+  bool getLocalName(struct net_buf_simple *buf, char *local_name,
+                    size_t name_size) const;
+  bool getManufacturerData(struct net_buf_simple *buf, uint8_t *data,
+                           size_t data_size) const;
+  bool getServiceUUID(struct net_buf_simple *buf, uint8_t *uuid,
+                      size_t uuid_size) const;
+  bool getCharacteristicUUID(struct net_buf_simple *buf, uint8_t *uuid,
+                              size_t uuid_size) const;
 };

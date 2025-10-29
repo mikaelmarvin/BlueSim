@@ -1,48 +1,37 @@
 #include "filter.hpp"
 #include <stdio.h>
+#include <string.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(FILTER, LOG_LEVEL_DBG);
 
-Filter::Filter() : _isActive(false), _operator(FilterOperator::NONE) {}
+Filter::Filter() : _group_count(0), _current_group_index(0) {}
 
 Filter &Filter::operator=(const Filter &other) {
   if (this != &other) {
-    _isActive = other._isActive;
-    _operator = other._operator;
+    _group_count = other._group_count;
+    _current_group_index = other._current_group_index;
 
-    _localNameFilter.enabled = other._localNameFilter.enabled;
-    memcpy(_localNameFilter.pattern, other._localNameFilter.pattern,
-           MAX_PATTERN_LENGTH);
-
-    _manufacturerDataFilter.enabled = other._manufacturerDataFilter.enabled;
-    memcpy(_manufacturerDataFilter.pattern,
-           other._manufacturerDataFilter.pattern, MAX_PATTERN_LENGTH);
+    // Copy all groups
+    for (uint8_t i = 0; i < MAX_FILTER_GROUPS; i++) {
+      _groups[i] = other._groups[i];
+    }
   }
   return *this;
 }
 
-void Filter::setLocalNamePattern(const char *pattern) {
-  if (!pattern) {
-    LOG_WRN("Pattern cannot be null");
+void Filter::addGroup() {
+  if (_group_count >= MAX_FILTER_GROUPS) {
+    LOG_WRN("Maximum number of filter groups reached");
     return;
   }
 
-  if (strlen(pattern) >= MAX_PATTERN_LENGTH) {
-    LOG_WRN("Pattern too long");
-    return;
-  }
-
-  if (!validatePattern(pattern)) {
-    LOG_WRN("Invalid pattern syntax");
-    return;
-  }
-
-  strncpy(_localNameFilter.pattern, pattern, MAX_PATTERN_LENGTH - 1);
-  _localNameFilter.pattern[MAX_PATTERN_LENGTH - 1] = '\0';
+  _current_group_index = _group_count;
+  _group_count++;
+  LOG_INF("Added filter group %d", _current_group_index);
 }
 
-void Filter::setManufacturerDataPattern(const char *pattern) {
+void Filter::addCriterion(FilterCriterionType type, const char *pattern) {
   if (!pattern) {
     LOG_WRN("Pattern cannot be null");
     return;
@@ -58,104 +47,149 @@ void Filter::setManufacturerDataPattern(const char *pattern) {
     return;
   }
 
-  strncpy(_manufacturerDataFilter.pattern, pattern, MAX_PATTERN_LENGTH - 1);
-  _manufacturerDataFilter.pattern[MAX_PATTERN_LENGTH - 1] = '\0';
+  if (_current_group_index >= _group_count) {
+    LOG_WRN("No active group. Call addGroup() first");
+    return;
+  }
+
+  FilterGroup &current_group = _groups[_current_group_index];
+  if (current_group.criteria_count >= MAX_CRITERIA_PER_GROUP) {
+    LOG_WRN("Maximum criteria per group reached");
+    return;
+  }
+
+  uint8_t index = current_group.criteria_count;
+  current_group.criteria[index].type = type;
+  current_group.criteria[index].enabled = true;
+  strncpy(current_group.criteria[index].pattern, pattern,
+          MAX_PATTERN_LENGTH - 1);
+  current_group.criteria[index].pattern[MAX_PATTERN_LENGTH - 1] = '\0';
+  current_group.criteria_count++;
+
+  LOG_INF("Added criterion type %d with pattern '%s' to group %d", (int)type,
+          pattern, _current_group_index);
+}
+
+void Filter::setGroupOperator(FilterOperator op) {
+  if (_current_group_index >= _group_count) {
+    LOG_WRN("No active group");
+    return;
+  }
+
+  _groups[_current_group_index].operator_between = op;
+  LOG_INF("Set operator for group %d to %d", _current_group_index, (int)op);
 }
 
 bool Filter::matchesDevice(const bt_addr_le_t *addr, int8_t rssi,
                            uint8_t adv_type, struct net_buf_simple *buf) const {
-  if (!_isActive) {
-    return false;
-  }
-
-  // Check if any filters are enabled
-  bool hasEnabledFilters =
-      _localNameFilter.enabled || _manufacturerDataFilter.enabled;
-  if (!hasEnabledFilters) {
-    // No filters enabled = match everything
+  // If no groups are configured, match everything
+  if (_group_count == 0) {
     return true;
   }
 
-  // Evaluate individual filter conditions
-  bool localNameMatch = false;
-  bool manufacturerMatch = false;
-
-  if (_localNameFilter.enabled) {
-    localNameMatch = matchesLocalName(buf);
+  // Evaluate each group
+  bool group_results[MAX_FILTER_GROUPS];
+  for (uint8_t i = 0; i < _group_count; i++) {
+    group_results[i] = evaluateGroup(_groups[i], buf);
   }
 
-  if (_manufacturerDataFilter.enabled) {
-    manufacturerMatch = matchesManufacturerData(buf);
+  // At least one group must match
+  for (uint8_t i = 0; i < _group_count; i++) {
+    if (group_results[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Filter::evaluateGroup(const FilterGroup &group,
+                           struct net_buf_simple *buf) const {
+  if (!group.enabled || group.criteria_count == 0) {
+    return false;
   }
 
-  // Apply logical operator
-  switch (_operator) {
-  case FilterOperator::AND:
-    return localNameMatch && manufacturerMatch;
+  // Evaluate each criterion in the group
+  bool criterion_results[MAX_CRITERIA_PER_GROUP];
+  for (uint8_t i = 0; i < group.criteria_count; i++) {
+    criterion_results[i] = matchesCriterion(group.criteria[i], buf);
+  }
 
-  case FilterOperator::OR:
-    return localNameMatch || manufacturerMatch;
+  // Combine criterion results with the group's operator
+  if (group.operator_between == FilterOperator::OR) {
+    // At least one criterion must match
+    for (uint8_t i = 0; i < group.criteria_count; i++) {
+      if (criterion_results[i]) {
+        return true;
+      }
+    }
+    return false;
+  } else {
+    // All criteria must match (AND)
+    for (uint8_t i = 0; i < group.criteria_count; i++) {
+      if (!criterion_results[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
 
-  case FilterOperator::NONE:
-    // If only one filter is enabled, return its result
-    if (_localNameFilter.enabled && !_manufacturerDataFilter.enabled) {
-      return localNameMatch;
+bool Filter::matchesCriterion(const FilterCriterion &criterion,
+                              struct net_buf_simple *buf) const {
+  if (!criterion.enabled) {
+    return false;
+  }
+
+  switch (criterion.type) {
+  case FilterCriterionType::LOCAL_NAME: {
+    char local_name[MAX_LOCAL_NAME_LENGTH];
+    if (getLocalName(buf, local_name, sizeof(local_name))) {
+      return matchesPattern(local_name, strlen(local_name), criterion.pattern);
     }
-    if (_manufacturerDataFilter.enabled && !_localNameFilter.enabled) {
-      return manufacturerMatch;
+    return false;
+  }
+
+  case FilterCriterionType::MANUFACTURER_DATA: {
+    uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
+    if (getManufacturerData(buf, manufacturer_data,
+                            sizeof(manufacturer_data))) {
+      // Convert to hex string for pattern matching
+      char hex_string[MAX_MANUFACTURER_DATA_LENGTH * 2 + 1];
+      for (size_t i = 0; i < sizeof(manufacturer_data); i++) {
+        snprintf(&hex_string[i * 2], 3, "%02X", manufacturer_data[i]);
+      }
+      return matchesPattern(hex_string, strlen(hex_string), criterion.pattern);
     }
-    // If both are enabled but operator is NONE, default to OR
-    return localNameMatch || manufacturerMatch;
+    return false;
+  }
+
+  case FilterCriterionType::SERVICE_UUID: {
+    uint8_t service_uuid[16];
+    if (getServiceUUID(buf, service_uuid, sizeof(service_uuid))) {
+      char hex_string[33]; // 16 bytes * 2
+      for (size_t i = 0; i < sizeof(service_uuid); i++) {
+        snprintf(&hex_string[i * 2], 3, "%02X", service_uuid[i]);
+      }
+      return matchesPattern(hex_string, strlen(hex_string), criterion.pattern);
+    }
+    return false;
+  }
+
+  case FilterCriterionType::CHARACTERISTIC_UUID: {
+    uint8_t char_uuid[16];
+    if (getCharacteristicUUID(buf, char_uuid, sizeof(char_uuid))) {
+      char hex_string[33];
+      for (size_t i = 0; i < sizeof(char_uuid); i++) {
+        snprintf(&hex_string[i * 2], 3, "%02X", char_uuid[i]);
+      }
+      return matchesPattern(hex_string, strlen(hex_string), criterion.pattern);
+    }
+    return false;
+  }
 
   default:
     return false;
   }
-}
-
-bool Filter::matchesLocalName(struct net_buf_simple *buf) const {
-  if (!_localNameFilter.enabled || strlen(_localNameFilter.pattern) == 0) {
-    return false;
-  }
-
-  char local_name[MAX_LOCAL_NAME_LENGTH];
-  uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
-
-  if (!parseAdvertisementData(buf, local_name, sizeof(local_name),
-                              manufacturer_data, sizeof(manufacturer_data))) {
-    return false;
-  }
-
-  return matchesPattern(local_name, strlen(local_name),
-                        _localNameFilter.pattern);
-}
-
-bool Filter::matchesManufacturerData(struct net_buf_simple *buf) const {
-  if (!_manufacturerDataFilter.enabled ||
-      strlen(_manufacturerDataFilter.pattern) == 0) {
-    return false;
-  }
-
-  char local_name[MAX_LOCAL_NAME_LENGTH];
-  uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
-
-  if (!parseAdvertisementData(buf, local_name, sizeof(local_name),
-                              manufacturer_data, sizeof(manufacturer_data))) {
-    return false;
-  }
-
-  // Convert manufacturer data to hex string for pattern matching
-  char hex_string[MAX_MANUFACTURER_DATA_LENGTH * 2 + 1];
-  hex_string[0] = '\0';
-
-  for (size_t i = 0; i < sizeof(manufacturer_data); i++) {
-    if (manufacturer_data[i] != 0) {
-      snprintf(hex_string, sizeof(hex_string), "%02X", manufacturer_data[i]);
-      break;
-    }
-  }
-
-  return matchesPattern(hex_string, strlen(hex_string),
-                        _manufacturerDataFilter.pattern);
 }
 
 bool Filter::matchesPattern(const char *data, size_t data_len,
@@ -207,14 +241,23 @@ bool Filter::matchesPattern(const char *data, size_t data_len,
 bool Filter::parseAdvertisementData(struct net_buf_simple *buf,
                                     char *local_name, size_t name_size,
                                     uint8_t *manufacturer_data,
-                                    size_t mfg_data_size) const {
-  if (!buf || !local_name || !manufacturer_data) {
+                                    size_t mfg_data_size, uint8_t *service_uuid,
+                                    size_t service_uuid_size,
+                                    uint8_t *characteristic_uuid,
+                                    size_t characteristic_uuid_size) const {
+  if (!buf) {
     return false;
   }
 
   // Initialize output buffers
-  memset(local_name, 0, name_size);
-  memset(manufacturer_data, 0, mfg_data_size);
+  if (local_name)
+    memset(local_name, 0, name_size);
+  if (manufacturer_data)
+    memset(manufacturer_data, 0, mfg_data_size);
+  if (service_uuid)
+    memset(service_uuid, 0, service_uuid_size);
+  if (characteristic_uuid)
+    memset(characteristic_uuid, 0, characteristic_uuid_size);
 
   // Parse advertisement data
   uint8_t *data = buf->data;
@@ -237,15 +280,27 @@ bool Filter::parseAdvertisementData(struct net_buf_simple *buf,
     switch (field_type) {
     case BT_DATA_NAME_SHORTENED:
     case BT_DATA_NAME_COMPLETE:
-      if (field_data_len < name_size) {
+      if (local_name && field_data_len < name_size) {
         memcpy(local_name, field_data, field_data_len);
         local_name[field_data_len] = '\0';
       }
       break;
 
     case BT_DATA_MANUFACTURER_DATA:
-      if (field_data_len <= mfg_data_size) {
+      if (manufacturer_data && field_data_len <= mfg_data_size) {
         memcpy(manufacturer_data, field_data, field_data_len);
+      }
+      break;
+
+    case BT_DATA_UUID16_SOME:
+    case BT_DATA_UUID16_ALL:
+    case BT_DATA_UUID32_SOME:
+    case BT_DATA_UUID32_ALL:
+    case BT_DATA_UUID128_SOME:
+    case BT_DATA_UUID128_ALL:
+      // For service UUID, we extract the first UUID found
+      if (service_uuid && field_data_len <= service_uuid_size) {
+        memcpy(service_uuid, field_data, field_data_len);
       }
       break;
 
@@ -261,6 +316,56 @@ bool Filter::parseAdvertisementData(struct net_buf_simple *buf,
   return true;
 }
 
+bool Filter::getLocalName(struct net_buf_simple *buf, char *local_name,
+                          size_t name_size) const {
+  uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
+  uint8_t service_uuid[16];
+  uint8_t characteristic_uuid[16];
+
+  return parseAdvertisementData(buf, local_name, name_size, manufacturer_data,
+                                sizeof(manufacturer_data), service_uuid,
+                                sizeof(service_uuid), characteristic_uuid,
+                                sizeof(characteristic_uuid));
+}
+
+bool Filter::getManufacturerData(struct net_buf_simple *buf, uint8_t *data,
+                                 size_t data_size) const {
+  char local_name[MAX_LOCAL_NAME_LENGTH];
+  uint8_t service_uuid[16];
+  uint8_t characteristic_uuid[16];
+
+  return parseAdvertisementData(
+      buf, local_name, sizeof(local_name), data, data_size, service_uuid,
+      sizeof(service_uuid), characteristic_uuid, sizeof(characteristic_uuid));
+}
+
+bool Filter::getServiceUUID(struct net_buf_simple *buf, uint8_t *uuid,
+                            size_t uuid_size) const {
+  char local_name[MAX_LOCAL_NAME_LENGTH];
+  uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
+  uint8_t characteristic_uuid[16];
+
+  return parseAdvertisementData(buf, local_name, sizeof(local_name),
+                                manufacturer_data, sizeof(manufacturer_data),
+                                uuid, uuid_size, characteristic_uuid,
+                                sizeof(characteristic_uuid));
+}
+
+bool Filter::getCharacteristicUUID(struct net_buf_simple *buf, uint8_t *uuid,
+                                   size_t uuid_size) const {
+  char local_name[MAX_LOCAL_NAME_LENGTH];
+  uint8_t manufacturer_data[MAX_MANUFACTURER_DATA_LENGTH];
+  uint8_t service_uuid[16];
+
+  // For now, characteristic UUID is same as service UUID in advertisement
+  // This is a limitation - characteristics are typically only available
+  // after connection and service discovery
+  return parseAdvertisementData(buf, local_name, sizeof(local_name),
+                                manufacturer_data, sizeof(manufacturer_data),
+                                service_uuid, sizeof(service_uuid), uuid,
+                                uuid_size);
+}
+
 bool Filter::validatePattern(const char *pattern) const {
   if (!pattern) {
     return false;
@@ -272,12 +377,13 @@ bool Filter::validatePattern(const char *pattern) const {
     return false;
   }
 
-  // Check for valid characters (alphanumeric, wildcards, spaces)
+  // Check for valid characters (alphanumeric, wildcards, spaces, colons for
+  // UUIDs)
   for (size_t i = 0; i < len; i++) {
     char c = pattern[i];
     if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
           (c >= '0' && c <= '9') || c == '*' || c == '?' || c == ' ' ||
-          c == '-')) {
+          c == '-' || c == ':')) {
       return false;
     }
   }
@@ -286,15 +392,11 @@ bool Filter::validatePattern(const char *pattern) const {
 }
 
 bool Filter::isValid() const {
-  // Check if any enabled filters have valid patterns
-  if (_localNameFilter.enabled && strlen(_localNameFilter.pattern) == 0) {
-    return false;
+  // Check if any groups are enabled and have criteria
+  for (uint8_t i = 0; i < _group_count; i++) {
+    if (_groups[i].enabled && _groups[i].criteria_count > 0) {
+      return true;
+    }
   }
-
-  if (_manufacturerDataFilter.enabled &&
-      strlen(_manufacturerDataFilter.pattern) == 0) {
-    return false;
-  }
-
-  return true;
+  return false;
 }
