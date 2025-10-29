@@ -69,14 +69,14 @@ bool Central::isConnectedTo(const bt_addr_le_t *addr) {
         return true;
       }
     }
-  } 
+  }
   // No connection exists
   return false;
 }
 
 int Central::connectToDevice(const bt_addr_le_t *addr) {
   if (isConnectedTo(addr)) {
-    return 0; 
+    return 0;
   }
 
   // Check if we have available connection slots

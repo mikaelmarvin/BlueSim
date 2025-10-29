@@ -5,12 +5,7 @@
 
 LOG_MODULE_REGISTER(FILTER, LOG_LEVEL_DBG);
 
-Filter::Filter() : _group_count(0), _current_group_index(0) {
-  // Initialize all groups
-  for (uint8_t i = 0; i < MAX_FILTER_GROUPS; i++) {
-    _groups[i] = FilterGroup();
-  }
-}
+Filter::Filter() : _group_count(0), _current_group_index(0) {}
 
 Filter &Filter::operator=(const Filter &other) {
   if (this != &other) {

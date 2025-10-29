@@ -43,8 +43,18 @@ int Scanner::startScanning() {
     }
   }
 
-  // Start Zephyr scanning if this is the first active scanner
+  // Start stack scanning if this is the first active scanner
   if (numberOfActiveScanners == 0) {
+    int err = Scanner::startStackScanning();
+    if (err < 0) {
+      LOG_ERR("Scanner %d: Failed to start stack scanning (err %d)", _index,
+              err);
+      return err;
+    }
+  }
+
+  // This case might happen with multiple Centrals when connecting
+  if (numberOfActiveScanners > 0 && !Scanner::isStackScanning) {
     int err = Scanner::startStackScanning();
     if (err < 0) {
       LOG_ERR("Scanner %d: Failed to start stack scanning (err %d)", _index,
@@ -67,7 +77,7 @@ int Scanner::stopScanning() {
     }
   }
 
-  // Stop Zephyr scanning if there is only one active scanner left
+  // Stop stack scanning if there is only one active scanner left
   if (numberOfActiveScanners == 1) {
     int err = Scanner::stopStackScanning();
     if (err < 0) {
@@ -100,7 +110,7 @@ void Scanner::scanCallback(const bt_addr_le_t *addr, int8_t rssi,
               scanner->_owner->_index);
 
       // check if the matched device is already connected
-      if(scanner->_owner->isConnectedTo(addr)){
+      if (scanner->_owner->isConnectedTo(addr)) {
         continue;
       }
 
@@ -135,12 +145,12 @@ int Scanner::startStackScanning() {
 
   int err = bt_le_scan_start(&Scanner::scanParameters, &Scanner::scanCallback);
   if (err < 0) {
-    LOG_ERR("Failed to start stack scanning (err %d)", err);
+    LOG_WRN("Failed to start stack scanning (err %d)", err);
     return err;
   }
 
   Scanner::isStackScanning = true;
-  LOG_INF("Stack scanning started successfully");
+  LOG_WRN("Stack scanning started successfully");
   return 0;
 }
 
@@ -152,11 +162,11 @@ int Scanner::stopStackScanning() {
 
   int err = bt_le_scan_stop();
   if (err < 0) {
-    LOG_ERR("Failed to stop stack scanning (err %d)", err);
+    LOG_WRN("Failed to stop stack scanning (err %d)", err);
     return err;
   }
 
   Scanner::isStackScanning = false;
-  LOG_INF("Stack scanning stopped successfully");
+  LOG_WRN("Stack scanning stopped successfully");
   return 0;
 }

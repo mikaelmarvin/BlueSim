@@ -1,4 +1,5 @@
 #include "central/central.hpp"
+#include "central/filter.hpp"
 #include "peripheral/advertisement.hpp"
 #include "peripheral/characteristic.hpp"
 #include "peripheral/peripheral.hpp"
@@ -89,15 +90,20 @@ int main() {
 
   // Peripheral p1;
   Central c1;
+  Central c2;
 
-  Filter filter;
-  filter.addGroup();
-  filter.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael1");
-  filter.addGroup();
-  filter.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael2");
-  c1.addFilter(filter);
+  Filter filter1;
+  filter1.addGroup();
+  filter1.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael1");
+  c1.addFilter(filter1);
+
+  Filter filter2;
+  filter2.addGroup();
+  filter2.addCriterion(FilterCriterionType::LOCAL_NAME, "Mikael2");
+  c2.addFilter(filter2);
 
   c1.scheduleScanningStart();
+  c2.scheduleScanningStart();
 
   // // Initialize advertisement
   // Advertisement advertisement;
