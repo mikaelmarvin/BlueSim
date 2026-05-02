@@ -1,0 +1,23 @@
+services:
+  dev-env:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./:/workspace/BlueSim:rw
+      - dev-home:/home/developer
+      - /dev/bus/usb:/dev/bus/usb
+    working_dir: /workspace/BlueSim
+    environment:
+      - TERM=xterm-256color
+    ports:
+      - "3333:3333"
+      - "4444:4444"
+    privileged: true
+    group_add:
+      - dialout
+
+volumes:
+  dev-home:

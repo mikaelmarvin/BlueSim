@@ -47,10 +47,14 @@ int Advertisement::init(const char *advertiser_name) {
   // Initialize the work item
   k_work_init_delayable(&_advert.work, workAction);
 
-  // Create advertisement parameters
-  _advParam = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_EXT_ADV | BT_LE_ADV_OPT_CONN,
-                                   BT_GAP_ADV_FAST_INT_MIN_2,
-                                   BT_GAP_ADV_FAST_INT_MAX_2, NULL);
+  // Fill by field
+  _advParam.id = BT_ID_DEFAULT;
+  _advParam.sid = 0;
+  _advParam.secondary_max_skip = 0;
+  _advParam.options = BT_LE_ADV_OPT_EXT_ADV | BT_LE_ADV_OPT_CONNECTABLE;
+  _advParam.interval_min = BT_GAP_ADV_FAST_INT_MIN_2;
+  _advParam.interval_max = BT_GAP_ADV_FAST_INT_MAX_2;
+  _advParam.peer = NULL;
   _advParam.id = _id;
 
   Advertisement::_extendedAdvCb = {
@@ -124,8 +128,11 @@ void Advertisement::workAction(struct k_work *work) {
     return;
   }
 
-  // Do the actual advertising start
-  int err = bt_le_ext_adv_start(self->_advert.adv, BT_LE_EXT_ADV_START_DEFAULT);
+  // Stack param: BT_LE_EXT_ADV_START_DEFAULT is a C compound-literal pointer
+  // (invalid in C++).
+  struct bt_le_ext_adv_start_param start_param =
+      BT_LE_EXT_ADV_START_PARAM_INIT(0, 0);
+  int err = bt_le_ext_adv_start(self->_advert.adv, &start_param);
 
   if (err < 0) {
     LOG_ERR("Advertisement %d failed to start advertising (err %d)",

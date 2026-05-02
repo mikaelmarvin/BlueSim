@@ -25,7 +25,7 @@ class Peripheral;
 // and a pointer to the owning Characteristic for use in the dispatcher.
 struct CccWrapper {
   Characteristic *chr;
-  bt_gatt_ccc_managed_user_data ccc;
+  struct _bt_gatt_ccc ccc;
 };
 
 class Service {

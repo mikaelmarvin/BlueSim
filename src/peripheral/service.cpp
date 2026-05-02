@@ -4,6 +4,16 @@
 
 LOG_MODULE_REGISTER(SERVICE, LOG_LEVEL_DBG);
 
+// Zephyr BT_UUID_* macros use C compound literals; C++ needs stable storage for pointers.
+namespace {
+const struct bt_uuid_16 uuid_gatt_primary{
+    {{BT_UUID_TYPE_16}}, BT_UUID_GATT_PRIMARY_VAL};
+const struct bt_uuid_16 uuid_gatt_chrc{
+    {{BT_UUID_TYPE_16}}, BT_UUID_GATT_CHRC_VAL};
+const struct bt_uuid_16 uuid_gatt_ccc{
+    {{BT_UUID_TYPE_16}}, BT_UUID_GATT_CCC_VAL};
+} // namespace
+
 Service::Service() {
   memset(_name, 0, sizeof(_name));
   memset(&_gattService, 0, sizeof(_gattService));
@@ -20,7 +30,7 @@ int Service::init(const struct bt_uuid *uuid, const char *name) {
   _name[sizeof(_name) - 1] = '\0';
 
   // Primary Service declaration
-  _attrs[_attrCount].uuid = BT_UUID_GATT_PRIMARY;
+  _attrs[_attrCount].uuid = &uuid_gatt_primary.uuid;
   _attrs[_attrCount].read = bt_gatt_attr_read_service;
   _attrs[_attrCount].write = NULL;
   _attrs[_attrCount].user_data = &_uuid;
@@ -40,7 +50,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
   chrc.value_handle = 0;
   _chrcCount++;
 
-  _attrs[_attrCount].uuid = BT_UUID_GATT_CHRC;
+  _attrs[_attrCount].uuid = &uuid_gatt_chrc.uuid;
   _attrs[_attrCount].perm = BT_GATT_PERM_READ;
   _attrs[_attrCount].read = bt_gatt_attr_read_chrc;
   _attrs[_attrCount].write = nullptr;
@@ -60,7 +70,7 @@ int Service::addCharacteristic(Characteristic *characteristic) {
       (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE)) {
     _cccs[_cccCount].ccc.cfg_changed = Characteristic::_cccDispatcher;
     _cccs[_cccCount].chr = characteristic;
-    _attrs[_attrCount].uuid = BT_UUID_GATT_CCC;
+    _attrs[_attrCount].uuid = &uuid_gatt_ccc.uuid;
     _attrs[_attrCount].perm = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE;
     _attrs[_attrCount].read = bt_gatt_attr_read_ccc;
     _attrs[_attrCount].write = bt_gatt_attr_write_ccc;

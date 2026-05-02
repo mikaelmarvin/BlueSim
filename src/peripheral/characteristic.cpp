@@ -64,7 +64,7 @@ void Characteristic::_cccDispatcher(const struct bt_gatt_attr *attr,
     return;
   }
 
-  bt_gatt_ccc *ccc = static_cast<bt_gatt_ccc *>(attr->user_data);
+  auto *ccc = static_cast<struct _bt_gatt_ccc *>(attr->user_data);
   CccWrapper *wrapper = CONTAINER_OF(ccc, CccWrapper, ccc);
   Characteristic *self = wrapper->chr;
 

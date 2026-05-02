@@ -16,7 +16,7 @@ using WriteCallback = ssize_t (*)(struct bt_conn *conn,
                                   const struct bt_gatt_attr *attr,
                                   const void *buf, uint16_t len,
                                   uint16_t offset, uint8_t flags);
-// This declaration was taken from bt_gatt_ccc_managed_user_data type
+// Matches struct _bt_gatt_ccc::cfg_changed in Zephyr's gatt.h
 using CCCCallback = void (*)(const struct bt_gatt_attr *attr, uint16_t value);
 
 // Characteristic properties
