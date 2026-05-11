@@ -1,0 +1,7 @@
+# Smaller/faster docker build context for the dev image
+.git
+.cache
+**/build
+**/.west
+**/__pycache__
+*.pyc

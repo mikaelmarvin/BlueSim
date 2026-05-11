@@ -16,3 +16,6 @@ target_sources(app PRIVATE
     src/peripheral/service.cpp
     src/peripheral/characteristic.cpp
 )
+
+set_target_properties(app PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+target_compile_options(app PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-fno-sized-deallocation>)

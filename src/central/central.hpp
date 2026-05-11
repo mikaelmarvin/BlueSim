@@ -8,9 +8,10 @@ extern "C" {
 #include <zephyr/kernel.h>
 }
 
-#define MAX_CENTRALS                                                           \
-  ((CONFIG_BT_MAX_CONN - CONFIG_BT_CTLR_SDC_PERIPHERAL_COUNT) / 2)
-#define MAX_CENTRAL_CONNECTIONS ((CONFIG_BT_MAX_CONN / 2) / MAX_CENTRALS)
+static constexpr int MAX_CENTRALS =
+    (CONFIG_BT_MAX_CONN - CONFIG_BT_CTLR_SDC_PERIPHERAL_COUNT) / 2;
+static constexpr int MAX_CENTRAL_CONNECTIONS =
+    (CONFIG_BT_MAX_CONN / 2) / MAX_CENTRALS;
 
 class Central {
 public:
@@ -42,7 +43,6 @@ public:
   struct bt_conn *_connections[MAX_CENTRAL_CONNECTIONS];
 
 private:
-  
   int startScanning() { return _scanner.startScanning(); }
   int stopScanning() { return _scanner.stopScanning(); }
 

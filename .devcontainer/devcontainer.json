@@ -2,10 +2,8 @@
   "name": "BlueSim-ncs",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "dev-env",
+  "initializeCommand": "bash .devcontainer/host-docker-tidy.sh",
   "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
-  "containerEnv": {
-    "NCS_VERSION": "v2.6.1"
-  },
   "customizations": {
     "vscode": {
       "extensions": [

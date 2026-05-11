@@ -1,5 +1,13 @@
+# NCS/Zephyr live under ~/ncs on the dev-home volume — survives container recreate.
+# Skips west update on start when the tree is already complete (see .devcontainer/setup.sh).
+#
+# `name` + fixed `image` keep a single project name and tag (fewer duplicate containers/images
+# when the repo is cloned under different paths). Host cleanup: .devcontainer/host-docker-tidy.sh
+name: bluesim
+
 services:
   dev-env:
+    image: bluesim-devcontainer:latest
     build:
       context: .
       dockerfile: .devcontainer/Dockerfile

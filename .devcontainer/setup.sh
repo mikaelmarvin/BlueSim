@@ -3,10 +3,16 @@ set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
+# Pinned NCS tag for this repo (override with NCS_VERSION when running setup, or set in compose/CI).
 NCS_VERSION="${NCS_VERSION:-v2.6.1}"
-NCS_IMAGE_ROOT="/opt/ncs/${NCS_VERSION}"
+# Persist on dev-home volume (not under /opt — that is lost when the container is recreated).
+NCS_WEST_ROOT="${HOME}/ncs/${NCS_VERSION}"
 NCS_WORKSPACE_LINK="/workspace/ncs"
-NCS_ROOT="${NCS_WORKSPACE_LINK}/${NCS_VERSION}"
+
+# Optional: NCS_FORCE_UPDATE=1 or NCS_REPAIR=1 to re-run a full west update.
+if [[ "${NCS_REPAIR:-}" == "1" ]]; then
+    export NCS_FORCE_UPDATE=1
+fi
 
 ensure_starship_bashrc() {
     local line='[ -n "$BASH_VERSION" ] && command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"'
@@ -48,10 +54,17 @@ export NCS_VERSION="${NCS_VERSION}"
 export NCS_ROOT="/workspace/ncs/\${NCS_VERSION}"
 if [[ -d "\${NCS_ROOT}/zephyr" ]]; then
     export ZEPHYR_BASE="\${NCS_ROOT}/zephyr"
-    fi
+fi
 EOF
         echo "Added NCS environment exports to ~/.bashrc"
     fi
+}
+
+# Starship + NCS exports for the dev user (postCreate and post-start).
+ensure_user_shell_extras() {
+    ensure_starship_bashrc || true
+    ensure_starship_config || true
+    ensure_ncs_bashrc || true
 }
 
 ensure_workspace_ncs_link() {
@@ -60,13 +73,11 @@ ensure_workspace_ncs_link() {
         echo "Warning: ${NCS_WORKSPACE_LINK} exists and is not a symlink; keeping existing path."
         return 0
     fi
-    ln -sfn "/opt/ncs" "${NCS_WORKSPACE_LINK}"
+    ln -sfn "${HOME}/ncs" "${NCS_WORKSPACE_LINK}"
 }
 
-# Fail fast if NCS is half-initialized (common after interrupted west update).
-# Without this, postCreate can "succeed" while west build is permanently missing.
 verify_ncs_workspace() {
-    local root="${NCS_IMAGE_ROOT}"
+    local root="${NCS_WEST_ROOT}"
     if [[ ! -d "${root}/.west" ]]; then
         echo "ERROR: No west workspace at ${root} (.west missing)." >&2
         return 1
@@ -77,7 +88,7 @@ verify_ncs_workspace() {
     fi
     cd "${root}"
     if ! west list >/dev/null 2>&1; then
-        echo "ERROR: west list failed — manifest or imported projects are incomplete. Run: cd ${root} && west update" >&2
+        echo "ERROR: west list failed — manifest or imported projects are incomplete." >&2
         return 1
     fi
     if ! west build -h >/dev/null 2>&1; then
@@ -88,69 +99,69 @@ verify_ncs_workspace() {
     return 0
 }
 
-setup_pinned_ncs() {
-    echo "west: $(west --version 2>/dev/null || echo 'not found')"
-    echo "Ensuring nRF Connect SDK ${NCS_VERSION} in ${NCS_IMAGE_ROOT}"
-
-    mkdir -p "${NCS_IMAGE_ROOT}"
-    ensure_workspace_ncs_link
-
-    if [[ ! -d "${NCS_IMAGE_ROOT}/.west" ]]; then
-        west init -m https://github.com/nrfconnect/sdk-nrf --mr "${NCS_VERSION}" "${NCS_IMAGE_ROOT}"
-    fi
-
-    cd "${NCS_IMAGE_ROOT}"
-    west update
-    west zephyr-export
-
+install_ncs_python_deps() {
+    cd "${NCS_WEST_ROOT}"
     if [[ -f "zephyr/scripts/requirements.txt" ]]; then
         pip3 install --no-cache-dir -r zephyr/scripts/requirements.txt
     fi
     if [[ -f "nrf/scripts/requirements.txt" ]]; then
         pip3 install --no-cache-dir -r nrf/scripts/requirements.txt
     fi
-
     cd "${REPO_ROOT}"
-    verify_ncs_workspace
-    echo "Pinned NCS ready: ${NCS_ROOT}"
 }
 
-# Idempotent: no-op when healthy; runs west update when a previous run left a broken tree.
-repair_ncs_workspace_if_needed() {
-    mkdir -p "${NCS_IMAGE_ROOT}"
+# Full bootstrap / repair (postCreate, or manual with NCS_REPAIR=1). Runs west update only when needed.
+setup_pinned_ncs() {
+    echo "west: $(west --version 2>/dev/null || echo 'not found')"
+    echo "NCS ${NCS_VERSION} west root: ${NCS_WEST_ROOT} (persistent under ~/ncs)"
+
+    mkdir -p "${HOME}/ncs"
     ensure_workspace_ncs_link
 
-    if [[ ! -d "${NCS_IMAGE_ROOT}/.west" ]]; then
-        echo "NCS west workspace missing; running full bootstrap..."
-        setup_pinned_ncs
-        return
+    local need_update=0
+    if [[ ! -d "${NCS_WEST_ROOT}/.west" ]]; then
+        west init -m https://github.com/nrfconnect/sdk-nrf --mr "${NCS_VERSION}" "${NCS_WEST_ROOT}"
+        need_update=1
+    elif [[ "${NCS_FORCE_UPDATE:-}" == "1" ]]; then
+        need_update=1
+    elif ! verify_ncs_workspace 2>/dev/null; then
+        echo "Workspace incomplete; running west update once to repair."
+        need_update=1
     fi
 
-    if verify_ncs_workspace; then
-        echo "NCS workspace OK (${NCS_IMAGE_ROOT})"
-        return 0
+    cd "${NCS_WEST_ROOT}"
+    if [[ "${need_update}" == "1" ]]; then
+        west update
+        install_ncs_python_deps
+    else
+        echo "NCS already complete — skipping west update (saves time and disk churn)."
     fi
-
-    echo "NCS workspace incomplete; running west update + west zephyr-export (this may take a while)..."
-    cd "${NCS_IMAGE_ROOT}"
-    west update
     west zephyr-export
     cd "${REPO_ROOT}"
     verify_ncs_workspace
+    echo "Pinned NCS ready (symlink): ${NCS_WORKSPACE_LINK}/${NCS_VERSION}"
+}
+
+# Every container start: fast — no west update, no heavy I/O.
+post_start_light() {
+    ensure_workspace_ncs_link || true
+    if verify_ncs_workspace 2>/dev/null; then
+        echo "NCS workspace OK (${NCS_WEST_ROOT})"
+    else
+        echo "NCS workspace missing or incomplete under ${NCS_WEST_ROOT}." >&2
+        echo "First time: rebuild the dev container (postCreate), or run:" >&2
+        echo "  NCS_REPAIR=1 bash .devcontainer/setup.sh" >&2
+        echo "To refresh all west projects intentionally:" >&2
+        echo "  NCS_FORCE_UPDATE=1 bash .devcontainer/setup.sh" >&2
+    fi
 }
 
 if [[ "${1:-}" == "--post-start" ]]; then
-    ensure_starship_bashrc || true
-    ensure_starship_config || true
-    ensure_ncs_bashrc || true
-    ensure_workspace_ncs_link || true
-    repair_ncs_workspace_if_needed
+    ensure_user_shell_extras
+    post_start_light || true
     exit 0
 fi
 
-ensure_starship_bashrc || true
-ensure_starship_config || true
-ensure_ncs_bashrc || true
-ensure_workspace_ncs_link || true
+ensure_user_shell_extras
 setup_pinned_ncs
 echo "Devcontainer setup done."

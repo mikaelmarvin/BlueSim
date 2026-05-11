@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
     build-essential \
     cmake \
     ninja-build \
@@ -17,7 +18,6 @@ RUN apt-get update && apt-get install -y \
     make \
     gcc \
     g++ \
-    gcc-arm-none-eabi \
     libsdl2-dev \
     libmagic1 \
     git \
@@ -46,19 +46,32 @@ RUN wget -q "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${Z
     && bash "${ZEPHYR_SDK_INSTALL_DIR}/setup.sh" -c -h -t arm-zephyr-eabi
 
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir west pyelftools
+    pip3 install --no-cache-dir west pyelftools intelhex
+
+# nRF Command Line Tools (nrfjprog): Zephyr nrf52840dk default flash-runner is nrfjprog before nrfutil.
+# Tarball bundles SEGGER J-Link shared libs; unpack JLink_*.tgz so nrfjprog can load libjlinkarm.so.
+ARG NRFCLT_URL=https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/desktop-software/nrf-command-line-tools/sw/versions-10-x-x/10-24-2/nrf-command-line-tools-10.24.2_linux-amd64.tar.gz
+ENV NRF5_TOOLS_ROOT=/opt/nrf5-tools
+RUN mkdir -p "${NRF5_TOOLS_ROOT}" && cd "${NRF5_TOOLS_ROOT}" \
+    && wget -q "${NRFCLT_URL}" -O nrfclt.tar.gz \
+    && tar xzf nrfclt.tar.gz \
+    && rm nrfclt.tar.gz \
+    && tar xzf JLink_Linux_*.tgz \
+    && rm JLink_Linux_*.tgz \
+    && JLINK_DIR="$(ls -d "${NRF5_TOOLS_ROOT}"/JLink_Linux_*_x86_64 | head -1)" \
+    && ln -sfn "${JLINK_DIR}" "${NRF5_TOOLS_ROOT}/jlink-extract" \
+    && rm -rf "${NRF5_TOOLS_ROOT}/nrf-command-line-tools/python"
+ENV PATH=${NRF5_TOOLS_ROOT}/nrf-command-line-tools/bin:${NRF5_TOOLS_ROOT}/jlink-extract:${PATH}
+ENV LD_LIBRARY_PATH=${NRF5_TOOLS_ROOT}/nrf-command-line-tools/lib:${NRF5_TOOLS_ROOT}/jlink-extract
 
 RUN curl -sS https://starship.rs/install.sh | sh -s -- -y -b /usr/local/bin
 
-RUN echo '' >> /etc/skel/.bashrc \
-    && echo '# Starship prompt (BlueSim devcontainer image)' >> /etc/skel/.bashrc \
-    && echo '[ -n "$BASH_VERSION" ] && command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"' >> /etc/skel/.bashrc
+# Starship init for ~/.bashrc is added by .devcontainer/setup.sh (postCreate / post-start).
 
 RUN useradd -m -s /bin/bash developer && \
     usermod -aG dialout developer && \
-    mkdir -p /opt/ncs && \
-    chown -R developer:developer /opt/ncs && \
     chown -R developer:developer /workspace
 
 USER developer
+
 CMD ["/bin/bash"]
